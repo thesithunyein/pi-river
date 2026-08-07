@@ -22,7 +22,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useAccount, useDisconnect } from "wagmi";
 
 export default function ProfilePage() {
-  const { googleUser, walletConnected, signOutGoogle } = useAuthGate();
+  const { googleUser, walletConnected, linkGoogle, linkWallet, logoutAll } = useAuthGate();
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [notice, setNotice] = useState<string | null>(null);
@@ -181,25 +181,38 @@ export default function ProfilePage() {
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-white">
               <UserIcon className="h-5 w-5" />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">Google</p>
               <p className="truncate text-sm font-bold text-white">
-                {googleUser?.email ?? "Not linked"}
+                {googleUser?.email ?? "Not linked yet"}
               </p>
             </div>
+            {!googleUser ? (
+              <GradientButton variant="secondary" className="min-h-9 px-3 text-xs" onClick={() => linkGoogle()}>
+                Link
+              </GradientButton>
+            ) : null}
           </div>
           <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-[#12101c] px-4 py-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#F5C518]/12 text-[#F5C518]">
               <WalletIcon className="h-5 w-5" />
             </span>
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">Wallet</p>
               <p className="truncate font-mono text-sm font-bold text-white">
-                {isConnected && short ? short : walletConnected ? "Connected" : "Not connected"}
+                {isConnected && short ? short : walletConnected ? "Connected" : "Not linked yet"}
               </p>
             </div>
+            {!isConnected ? (
+              <GradientButton variant="secondary" className="min-h-9 px-3 text-xs" onClick={() => linkWallet()}>
+                Link
+              </GradientButton>
+            ) : null}
           </div>
         </div>
+        <p className="text-xs leading-relaxed text-[#9AA0B4]">
+          Google and wallet belong to the same player profile. Link both so you can browse with Google and play tables with your wallet.
+        </p>
       </GlassCard>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -398,24 +411,13 @@ export default function ProfilePage() {
             </div>
 
             <div className="flex flex-wrap gap-2">
-              {googleUser ? (
-                <GradientButton
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={async () => {
-                    await signOutGoogle();
-                  }}
-                >
-                  Sign out Google
-                </GradientButton>
-              ) : null}
               {isConnected ? (
                 <GradientButton
                   variant="secondary"
                   className="flex-1"
                   onClick={() => disconnect()}
                 >
-                  Disconnect wallet
+                  Unlink wallet
                 </GradientButton>
               ) : null}
               <GradientButton
@@ -428,6 +430,14 @@ export default function ProfilePage() {
                 }}
               >
                 Reset chips
+              </GradientButton>
+              <GradientButton
+                className="w-full"
+                onClick={async () => {
+                  await logoutAll();
+                }}
+              >
+                Log out of pi River
               </GradientButton>
             </div>
           </GlassCard>

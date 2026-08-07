@@ -36,15 +36,15 @@ export default function LobbyPage() {
 
   async function createTable() {
     if (!isConnected) {
-      setStatus("Connect your wallet to sit down.");
+      setStatus("Add a wallet in the top bar first. Google alone can browse, but tables need a wallet.");
       return;
     }
     if (!contractReady) {
-      setStatus("Tables open soon. Contract deploy is finishing.");
+      setStatus("Tables are almost ready. The game contract is finishing deploy.");
       return;
     }
     try {
-      setStatus("Opening your table…");
+      setStatus("Opening your private table…");
       const hash = await writeContractAsync({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
@@ -70,7 +70,7 @@ export default function LobbyPage() {
         }
       }
       if (tableId === undefined) {
-        setStatus("Table opened. Check your wallet activity for the id.");
+        setStatus("Table opened. Check your wallet activity for the table number.");
         return;
       }
       router.push(`/table/${tableId.toString()}`);
@@ -81,16 +81,16 @@ export default function LobbyPage() {
 
   async function joinTable() {
     if (!isConnected) {
-      setStatus("Connect your wallet to join.");
+      setStatus("Add a wallet in the top bar to join a table.");
       return;
     }
     if (!contractReady) {
-      setStatus("Tables open soon. Contract deploy is finishing.");
+      setStatus("Tables are almost ready. The game contract is finishing deploy.");
       return;
     }
     const id = BigInt(joinId || "0");
     if (id <= 0n) {
-      setStatus("Enter a table number from your opponent.");
+      setStatus("Enter the table number your friend shared.");
       return;
     }
     try {
@@ -124,7 +124,7 @@ export default function LobbyPage() {
         />
         <div className="relative mx-auto flex max-w-lg flex-col items-center text-center">
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-[#9dceb4]">
-            Heads-up private Hold&apos;em
+            Private heads-up poker
           </p>
           <h1 className="font-display text-4xl font-black leading-[1.05] text-white sm:text-5xl">
             Sit down.
@@ -132,8 +132,7 @@ export default function LobbyPage() {
             <span className="text-[#F5C518]">Keep your hand.</span>
           </h1>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-[#b7d7c6]">
-            Two players. Encrypted hole cards on Inco Lightning. Public board.
-            Winner takes the pot on Base Sepolia.
+            Two players. Your hole cards stay hidden until showdown. Create a table, share the number, and play.
           </p>
 
           <div className="mt-6 flex w-full flex-col gap-3">
@@ -143,14 +142,17 @@ export default function LobbyPage() {
               onClick={createTable}
               disabled={isPending}
             >
-              {isPending ? "Confirm in wallet…" : "Create table (0.001 ETH)"}
+              {isPending ? "Confirm in your wallet…" : "Create private table"}
             </GradientButton>
+            <p className="text-[11px] font-semibold text-[#9dceb4]/90">
+              Seat buy-in: 0.001 test ETH on Base Sepolia (free faucet money, not real cash)
+            </p>
 
             <div className="flex gap-2">
               <input
                 value={joinId}
                 onChange={(e) => setJoinId(e.target.value.replace(/[^\d]/g, ""))}
-                placeholder="Table #"
+                placeholder="Friend's table #"
                 inputMode="numeric"
                 className="min-h-14 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 text-center text-base font-bold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
               />
@@ -177,18 +179,18 @@ export default function LobbyPage() {
         {[
           {
             icon: LockIncoIcon,
-            title: "Private cards",
-            body: "Only your wallet can decrypt your hole cards.",
+            title: "Your cards stay private",
+            body: "Only you can open your hole cards until the hand ends.",
           },
           {
             icon: TableIcon,
-            title: "Public board",
-            body: "Flop, turn, and river reveal for both players.",
+            title: "Shared board",
+            body: "Flop, turn, and river are visible to both players.",
           },
           {
             icon: TrophyIcon,
-            title: "On-chain settle",
-            body: "Showdown verifies attestations, then pays the pot.",
+            title: "Winner takes the pot",
+            body: "When the hand settles, the pot pays out automatically.",
           },
         ].map(({ icon: Icon, title, body }) => (
           <div
@@ -210,11 +212,11 @@ export default function LobbyPage() {
             <TableIcon className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="text-base font-black text-white">Quick rules</h2>
+            <h2 className="text-base font-black text-white">How to start</h2>
             <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-[#9AA0B4]">
-              <li>1. Connect a Base Sepolia wallet</li>
-              <li>2. Create a table or join with a table number</li>
-              <li>3. Play heads-up. Cash out when the hand settles</li>
+              <li>1. Sign in with Google (easy) and link a wallet when you want to play</li>
+              <li>2. Create a table or join with a friend&apos;s table number</li>
+              <li>3. Play heads-up. The pot settles when the hand ends</li>
             </ul>
           </div>
         </div>

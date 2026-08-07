@@ -12,7 +12,7 @@ import { GradientButton } from "@/components/ui/GradientButton";
 
 export function TopBar() {
   const { chips } = useGame();
-  const { googleUser } = useAuthGate();
+  const { googleUser, logoutAll, linkedComplete } = useAuthGate();
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -37,7 +37,7 @@ export function TopBar() {
               pi <span className="text-[#F5C518]">River</span>
             </p>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7d8398]">
-              Base Sepolia
+              {linkedComplete ? "Google + wallet" : googleUser ? "Signed in" : "Wallet ready"}
             </p>
           </div>
         </Link>
@@ -50,12 +50,6 @@ export function TopBar() {
             </span>
           </div>
 
-          {googleUser && !isConnected ? (
-            <span className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-bold text-[#9AA0B4] sm:inline">
-              Google in
-            </span>
-          ) : null}
-
           {isConnected ? (
             <>
               {chainId !== baseSepolia.id ? (
@@ -64,13 +58,14 @@ export function TopBar() {
                   className="min-h-10 px-3 text-xs"
                   onClick={() => switchChain({ chainId: baseSepolia.id })}
                 >
-                  Switch network
+                  Use test network
                 </GradientButton>
               ) : null}
               <button
                 type="button"
                 onClick={() => disconnect()}
                 className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-xs font-bold text-white transition hover:bg-white/10"
+                title="Unlink wallet only. You stay signed in if Google is linked."
               >
                 <WalletIcon className="h-4 w-4 text-[#F5C518]" />
                 {short}
@@ -83,9 +78,17 @@ export function TopBar() {
               disabled={isPending || !connectors[0]}
               onClick={() => connectors[0] && connect({ connector: connectors[0] })}
             >
-              {isPending ? "…" : "Wallet"}
+              {isPending ? "…" : "Add wallet"}
             </GradientButton>
           )}
+
+          <button
+            type="button"
+            onClick={() => logoutAll()}
+            className="hidden min-h-10 rounded-full border border-white/10 bg-white/5 px-3 text-xs font-bold text-[#9AA0B4] transition hover:bg-white/10 hover:text-white sm:inline"
+          >
+            Log out
+          </button>
 
           <Link
             href="/profile"

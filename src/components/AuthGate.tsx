@@ -1,19 +1,25 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { useAccount, useConnect } from "wagmi";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import Image from "next/image";
 import { LockIncoIcon, WalletIcon } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { clearLinkedIdentity, readLinkedIdentity, writeLinkedIdentity } from "@/lib/identity";
 
 type AuthGateContextValue = {
   ready: boolean;
   googleUser: User | null;
   walletConnected: boolean;
+  walletAddress: string | null;
   signedIn: boolean;
+  linkedComplete: boolean;
+  linkGoogle: () => Promise<void>;
+  linkWallet: () => void;
   signOutGoogle: () => Promise<void>;
+  logoutAll: () => Promise<void>;
 };
 
 const AuthGateContext = createContext<AuthGateContextValue | null>(null);
@@ -73,16 +79,19 @@ function EntryScreen({
       <div className="relative w-full max-w-md space-y-5">
         <div className="flex flex-col items-center text-center">
           <Image
-            src="/brand/mi-logo.svg"
+            src="/brand/mi-mark.svg"
             alt="pi River"
-            width={176}
-            height={40}
-            className="h-11 w-auto"
+            width={88}
+            height={88}
+            className="h-[88px] w-[88px] rounded-[28px] shadow-[0_16px_40px_rgba(245,197,24,0.35)]"
             priority
           />
-          <h1 className="mt-5 font-display text-3xl font-black text-white">Sit down to play</h1>
+          <p className="mt-4 font-display text-2xl font-black tracking-tight text-white">
+            pi <span className="text-[#F5C518]">River</span>
+          </p>
+          <h1 className="mt-3 font-display text-3xl font-black text-white">Welcome in</h1>
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#9AA0B4]">
-            Google or wallet unlocks the full app. Play, Shop, Rewards, and Profile stay locked until then.
+            Sign in with Google, or connect a wallet. You can link both later under Profile. One account, one seat.
           </p>
         </div>
 
@@ -109,12 +118,16 @@ function EntryScreen({
             onClick={onWallet}
             disabled={walletLoading}
           >
-            {walletLoading ? "Connecting…" : "Connect wallet"}
+            {walletLoading ? "Connecting…" : "Continue with wallet"}
           </GradientButton>
 
           {googleError ? (
             <p className="text-center text-xs font-semibold text-[#FF8A3D]">{googleError}</p>
           ) : null}
+
+          <p className="text-center text-[11px] leading-relaxed text-[#7d8398]">
+            New here? Google is the easiest. Wallet is only needed when you sit at a real table.
+          </p>
         </div>
 
         <div className="flex items-start gap-3 rounded-[22px] border border-white/8 bg-white/[0.03] p-4">
@@ -122,7 +135,7 @@ function EntryScreen({
             <LockIncoIcon className="h-5 w-5" />
           </span>
           <p className="text-left text-xs leading-relaxed text-[#9AA0B4]">
-            Confidential heads-up Hold&apos;em on Inco Lightning, Base Sepolia. Hole cards stay private until showdown.
+            Your cards stay private until the hand ends. Think of it as sealed envelopes only you can open.
           </p>
         </div>
       </div>
@@ -131,8 +144,9 @@ function EntryScreen({
 }
 
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const { connect, connectors, isPending: walletLoading } = useConnect();
+  const { disconnect } = useDisconnect();
   const [ready, setReady] = useState(false);
   const [googleUser, setGoogleUser] = useState<User | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -161,24 +175,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!googleUser && !isConnected) return;
+    writeLinkedIdentity({
+      googleUserId: googleUser?.id ?? readLinkedIdentity().googleUserId,
+      email: googleUser?.email ?? readLinkedIdentity().email,
+      walletAddress: address ?? readLinkedIdentity().walletAddress,
+    });
+  }, [googleUser, isConnected, address]);
+
   const signedIn = Boolean(googleUser) || isConnected;
+  const linkedComplete = Boolean(googleUser) && isConnected;
 
-  const value = useMemo<AuthGateContextValue>(
-    () => ({
-      ready,
-      googleUser,
-      walletConnected: isConnected,
-      signedIn,
-      signOutGoogle: async () => {
-        const supabase = createClient();
-        await supabase.auth.signOut();
-        setGoogleUser(null);
-      },
-    }),
-    [ready, googleUser, isConnected, signedIn]
-  );
-
-  async function handleGoogle() {
+  async function startGoogle() {
     setGoogleError(null);
     setGoogleLoading(true);
     try {
@@ -188,29 +197,66 @@ export function AuthGate({ children }: { children: ReactNode }) {
         options: { redirectTo: `${window.location.origin}/auth/callback` },
       });
       if (error) {
-        setGoogleError(error.message || "Google sign-in is not configured yet. Use wallet for now.");
+        setGoogleError(error.message || "Google sign-in is not ready yet. Try wallet, or check Supabase settings.");
         setGoogleLoading(false);
       }
     } catch {
-      setGoogleError("Google sign-in failed. Connect a wallet to continue.");
+      setGoogleError("Could not open Google. Try again, or continue with a wallet.");
       setGoogleLoading(false);
     }
   }
 
-  function handleWallet() {
+  function startWallet() {
     const connector = connectors[0];
     if (!connector) {
-      setGoogleError("No wallet extension found. Install MetaMask or another injected wallet.");
+      setGoogleError("No browser wallet found. Install MetaMask, then refresh this page.");
       return;
     }
     connect({ connector });
   }
 
+  async function signOutGoogleOnly() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    setGoogleUser(null);
+    writeLinkedIdentity({ googleUserId: null, email: null });
+  }
+
+  async function logoutAll() {
+    await signOutGoogleOnly();
+    if (isConnected) disconnect();
+    clearLinkedIdentity();
+  }
+
+  const value = useMemo<AuthGateContextValue>(
+    () => ({
+      ready,
+      googleUser,
+      walletConnected: isConnected,
+      walletAddress: address ?? null,
+      signedIn,
+      linkedComplete,
+      linkGoogle: startGoogle,
+      linkWallet: startWallet,
+      signOutGoogle: signOutGoogleOnly,
+      logoutAll,
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [ready, googleUser, isConnected, address, signedIn, linkedComplete, walletLoading, connectors]
+  );
+
   if (!ready) {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="flex flex-col items-center gap-3">
-          <div className="h-12 w-12 animate-pulse rounded-2xl bg-[#F5C518]" />
+          <Image
+            src="/brand/mi-mark.svg"
+            alt=""
+            width={56}
+            height={56}
+            className="h-14 w-14 animate-pulse rounded-2xl"
+            priority
+          />
           <p className="text-sm font-bold text-[#9AA0B4]">Loading pi River…</p>
         </div>
       </div>
@@ -221,8 +267,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     return (
       <AuthGateContext.Provider value={value}>
         <EntryScreen
-          onGoogle={handleGoogle}
-          onWallet={handleWallet}
+          onGoogle={startGoogle}
+          onWallet={startWallet}
           googleLoading={googleLoading}
           walletLoading={walletLoading}
           googleError={googleError}
