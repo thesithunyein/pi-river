@@ -1,5 +1,5 @@
 {
-  "name": "RIVER — Onchain Poker",
+  "name": "RIVER | Onchain Poker",
   "description": "Onchain poker app where the house cannot see your cards. Powered by Inco FHE.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

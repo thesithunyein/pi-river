@@ -17,7 +17,7 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!isValidUrl(url) || !key) {
-    // Return a stub that doesn't crash — auth operations will fail gracefully
+    // Return a stub that doesn't crash: auth operations will fail gracefully
     return {
       auth: {
         getUser: async () => ({ data: { user: null }, error: null }),
