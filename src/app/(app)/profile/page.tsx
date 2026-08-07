@@ -70,7 +70,7 @@ export default function ProfilePage() {
     }
   };
 
-  const computedWinRate = stats.handsPlayed > 0 ? (stats.gamesWon / stats.handsPlayed) * 100 : 62.3;
+  const computedWinRate = stats.handsPlayed > 0 ? (stats.gamesWon / stats.handsPlayed) * 100 : 0;
 
   const statsGrid = [
     { label: "Hands Played", value: stats.handsPlayed.toLocaleString() },

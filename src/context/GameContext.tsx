@@ -92,34 +92,29 @@ interface GameContextType {
 }
 
 const INITIAL_MISSIONS: MissionItem[] = [
-  { id: 1, icon: "🃏", title: "Play 10 hands of Texas Hold'em", rewardChips: 20000, rewardXP: 500, rewardText: "+500 XP · +20,000 chips", progress: 70, completed: false, claimed: false },
-  { id: 2, icon: "🔥", title: "Win 3 hands in a row", rewardChips: 50000, rewardXP: 1000, rewardText: "+1,000 XP · Streak x2", progress: 33, completed: false, claimed: false },
-  { id: 3, icon: "🛍", title: "Equip or purchase a Card Back", rewardChips: 15000, rewardXP: 300, rewardText: "+300 XP · Exclusive card back", progress: 100, completed: true, claimed: false },
-  { id: 4, icon: "👑", title: "Reach Gold tier this week", rewardChips: 100000, rewardXP: 2500, rewardText: "VIP chest · 100,000 chips", progress: 80, completed: false, claimed: false },
+  { id: 1, icon: "🃏", title: "Play 10 hands of Texas Hold'em", rewardChips: 20000, rewardXP: 500, rewardText: "+500 XP · +20,000 chips", progress: 0, completed: false, claimed: false },
+  { id: 2, icon: "🔥", title: "Win 3 hands in a row", rewardChips: 50000, rewardXP: 1000, rewardText: "+1,000 XP · Streak x2", progress: 0, completed: false, claimed: false },
+  { id: 3, icon: "🛍", title: "Equip or purchase a Card Back", rewardChips: 15000, rewardXP: 300, rewardText: "+300 XP · Exclusive card back", progress: 0, completed: false, claimed: false },
+  { id: 4, icon: "👑", title: "Reach Gold tier this week", rewardChips: 100000, rewardXP: 2500, rewardText: "VIP chest · 100,000 chips", progress: 0, completed: false, claimed: false },
   { id: 5, icon: "🎁", title: "Claim Daily Chip Bonus", rewardChips: 50000, rewardXP: 500, rewardText: "Trophy · 50,000 chips", progress: 0, completed: false, claimed: false },
 ];
 
 const INITIAL_STATS: PlayerStats = {
-  handsPlayed: 1247,
-  gamesWon: 892,
-  biggestWin: 340000,
-  currentStreak: 3,
-  totalEarnings: 2400000,
+  handsPlayed: 0,
+  gamesWon: 0,
+  biggestWin: 0,
+  currentStreak: 0,
+  totalEarnings: 0,
 };
 
-const INITIAL_MATCHES: MatchRecord[] = [
-  { opponent: "Maya", result: "win", hand: "Full House", chips: "+45,000", time: "2m ago" },
-  { opponent: "Kenji", result: "loss", hand: "Two Pair", chips: "-20,000", time: "15m ago" },
-  { opponent: "Pia", result: "win", hand: "Flush", chips: "+120,000", time: "1h ago" },
-  { opponent: "Jonas", result: "win", hand: "Straight", chips: "+28,000", time: "2h ago" },
-];
+const INITIAL_MATCHES: MatchRecord[] = [];
 
 const INITIAL_PROFILE: UserProfile = {
-  displayName: "River VIP Player",
-  bio: "Full House Specialist & Inco FHE Onchain Poker player 🃏",
+  displayName: "Player",
+  bio: "Inco FHE Onchain Poker player 🃏",
   avatarId: "cyber-fox",
-  country: "🇺🇸 USA",
-  favHand: "A♠ A♥ Pocket Aces",
+  country: "🌐 Global",
+  favHand: "A♠ K♠ Ace King Suited",
 };
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
@@ -127,9 +122,9 @@ const GameContext = createContext<GameContextType | undefined>(undefined);
 const STORAGE_KEY = "river_poker_player_state_v1";
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
-  const [chips, setChips] = useState<number>(2450000);
-  const [xp, setXp] = useState<number>(780000);
-  const [vipTier, setVipTier] = useState<string>("Gold");
+  const [chips, setChips] = useState<number>(50000);
+  const [xp, setXp] = useState<number>(0);
+  const [vipTier, setVipTier] = useState<string>("Bronze");
   const [equippedCardBack, setEquippedCardBack] = useState<string>("classic");
   const [equippedTableFelt, setEquippedTableFelt] = useState<string>("green");
   const [ownedCardBacks, setOwnedCardBacks] = useState<string[]>(["classic"]);
@@ -406,8 +401,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   };
 
   const resetProgress = () => {
-    setChips(2450000);
-    setXp(780000);
+    setChips(50000);
+    setXp(0);
+    setVipTier("Bronze");
     setMissions(INITIAL_MISSIONS);
     setStats(INITIAL_STATS);
     setMatchHistory(INITIAL_MATCHES);

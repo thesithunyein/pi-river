@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { sound } from "@/lib/sound";
 import { getAvatarForPlayer } from "@/lib/avatars";
+import { P2PRelay, P2PEvent } from "@/lib/p2pRelay";
+import { useGame } from "@/context/GameContext";
 
 export interface ChatMessage {
   id: string;
@@ -24,9 +26,31 @@ const INITIAL_MESSAGES: ChatMessage[] = [
 ];
 
 export default function CommunityChat({ isOpen, onToggle }: { isOpen?: boolean; onToggle?: () => void }) {
+  const { profile } = useGame();
   const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
   const [inputText, setInputText] = useState("");
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Initialize P2P Relay for multi-tab chat
+  const [p2p] = useState(() => new P2PRelay("global-lobby-chat"));
+
+  useEffect(() => {
+    const unsub = p2p.subscribe((evt: P2PEvent) => {
+      if (evt.type === "CHAT" && evt.payload?.text) {
+        sound.playChip();
+        const incomingMsg: ChatMessage = {
+          id: `${evt.timestamp}-${Math.random()}`,
+          sender: evt.senderName || "Player",
+          role: "player",
+          avatarBg: "from-purple-500 to-indigo-600",
+          text: evt.payload.text,
+          time: "Just now",
+        };
+        setMessages((prev) => [...prev.slice(-30), incomingMsg]);
+      }
+    });
+    return () => unsub();
+  }, [p2p]);
 
   const scrollToBottom = () => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -63,8 +87,8 @@ export default function CommunityChat({ isOpen, onToggle }: { isOpen?: boolean; 
         time: "Just now",
       };
 
-      setMessages((prev) => [...prev.slice(-20), newMsg]);
-    }, 12000);
+      setMessages((prev) => [...prev.slice(-25), newMsg]);
+    }, 14000);
 
     return () => clearInterval(interval);
   }, []);
@@ -74,16 +98,20 @@ export default function CommunityChat({ isOpen, onToggle }: { isOpen?: boolean; 
     if (!inputText.trim()) return;
 
     sound.playClick();
+    const senderName = profile.displayName || "You";
+    const text = inputText.trim();
+
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
-      sender: "You",
+      sender: senderName,
       role: "player",
       avatarBg: "from-cyan-400 to-blue-600",
-      text: inputText.trim(),
+      text,
       time: "Just now",
     };
 
     setMessages((prev) => [...prev, userMsg]);
+    p2p.broadcast("CHAT", "user-self", senderName, { text });
     setInputText("");
   };
 
