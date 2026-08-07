@@ -1,6 +1,5 @@
 {
-  "name": "mi River",
-  "description": "mi River is a confidential Hold'em experience built for the Inco Summer Game Jam on Inco Lightning and Base Sepolia.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "name": "pi River",
+  "description": "pi River is a confidential Hold'em experience built for the Inco Summer Game Jam on Inco Lightning and Base Sepolia.",
+  "requestFramePermissions": []
 }

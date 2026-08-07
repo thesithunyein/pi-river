@@ -9,7 +9,7 @@ export default function NotFound() {
       </div>
       <h1 className="text-3xl font-black font-display text-river-white">Page not found</h1>
       <p className="max-w-sm text-sm text-river-grey">
-        The table or screen you are looking for is not part of the current mi River shell.
+        The table or screen you are looking for is not part of the current pi River shell.
       </p>
       <Link
         href="/"

@@ -13,7 +13,6 @@ import {
   BoltIcon,
   CardsIcon,
   LockIncoIcon,
-  SpadeIcon,
   TableIcon,
   TrophyIcon,
 } from "@/components/icons";
@@ -112,7 +111,7 @@ export default function LobbyPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="animate-fade-in space-y-5">
       {/* Hero felt */}
       <section className="relative overflow-hidden rounded-[32px] border border-[#2a6b4a]/50 bg-[radial-gradient(ellipse_at_center,#1b6b45_0%,#0d3a28_55%,#071a14_100%)] px-5 pb-6 pt-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:px-8">
         <div
@@ -124,11 +123,12 @@ export default function LobbyPage() {
           }}
         />
         <div className="relative mx-auto flex max-w-lg flex-col items-center text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F5C518] text-[#14100a] shadow-[0_12px_40px_rgba(245,197,24,0.35)]">
-            <SpadeIcon className="h-9 w-9" />
+          <div className="mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#F5C518] shadow-[0_12px_40px_rgba(245,197,24,0.35)]">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/brand/mi-mark.svg" alt="pi" className="h-16 w-16" />
           </div>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-[#9dceb4]">
-            Heads-up · Private hole cards
+            pi River · Heads-up · Private hole cards
           </p>
           <h1 className="font-display text-4xl font-black leading-[1.05] text-white sm:text-5xl">
             Sit down.

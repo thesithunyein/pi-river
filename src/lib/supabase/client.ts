@@ -17,18 +17,20 @@ export function createClient() {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!isValidUrl(url) || !key) {
-    // Return a stub that doesn't crash: auth operations will fail gracefully
     return {
       auth: {
         getUser: async () => ({ data: { user: null }, error: null }),
         signInWithOAuth: async () => ({
           error: {
             message:
-              "Supabase not configured. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in environment variables.",
+              "Google is not configured. Connect a wallet to continue, or add Supabase env keys.",
           },
         }),
         signOut: async () => ({ error: null }),
         exchangeCodeForSession: async () => ({ error: null }),
+        onAuthStateChange: () => ({
+          data: { subscription: { unsubscribe: () => undefined } },
+        }),
       },
     } as any;
   }

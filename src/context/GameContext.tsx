@@ -135,7 +135,7 @@ const INITIAL_PROFILE: UserProfile = {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
-const STORAGE_KEY = "mi_river_player_state_v2";
+const STORAGE_KEY = "pi_river_player_state_v1";
 const DAILY_REWARD_COOLDOWN = 24 * 60 * 60 * 1000;
 
 function getTierForXp(totalXp: number) {

@@ -12,7 +12,7 @@ interface CreateRoomModalProps {
 
 export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProps) {
   const router = useRouter();
-  const [roomName, setRoomName] = useState("mi River Home Table");
+  const [roomName, setRoomName] = useState("pi River Home Table");
   const [gameVariant, setGameVariant] = useState("No Limit Hold'em");
   const [blinds, setBlinds] = useState("20,000 / 40,000");
   const [maxSeats, setMaxSeats] = useState(6);
@@ -63,7 +63,7 @@ export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProp
           <div>
             <h3 className="font-display text-2xl font-black text-white">Create a local room</h3>
             <p className="mt-1 text-sm text-river-grey">
-              This saves your table settings in the browser and opens the demo table with your selected mood.
+              This saves your table settings in the browser and opens the table with your selected mood.
             </p>
           </div>
         </div>

@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { CoinIcon, WalletIcon } from "@/components/icons";
+import { useAuthGate } from "@/components/AuthGate";
 import { useGame } from "@/context/GameContext";
 import { GradientButton } from "@/components/ui/GradientButton";
 
 export function TopBar() {
   const { chips, profile } = useGame();
+  const { googleUser } = useAuthGate();
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors, isPending } = useConnect();
   const { disconnect } = useDisconnect();
@@ -31,7 +33,7 @@ export function TopBar() {
           />
           <div className="min-w-0 leading-tight">
             <p className="font-display text-[17px] font-black tracking-tight text-white">
-              mi <span className="text-[#F5C518]">River</span>
+              pi <span className="text-[#F5C518]">River</span>
             </p>
             <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7d8398]">
               Base Sepolia
@@ -46,6 +48,12 @@ export function TopBar() {
               {chips.toLocaleString()}
             </span>
           </div>
+
+          {googleUser && !isConnected ? (
+            <span className="hidden rounded-full border border-white/10 bg-white/5 px-3 py-2 text-[11px] font-bold text-[#9AA0B4] sm:inline">
+              Google in
+            </span>
+          ) : null}
 
           {isConnected ? (
             <>
@@ -71,10 +79,10 @@ export function TopBar() {
             <GradientButton
               className="min-h-10 px-4 text-xs"
               icon={<WalletIcon className="h-4 w-4" />}
-              disabled={isPending}
-              onClick={() => connect({ connector: connectors[0] })}
+              disabled={isPending || !connectors[0]}
+              onClick={() => connectors[0] && connect({ connector: connectors[0] })}
             >
-              {isPending ? "…" : "Connect"}
+              {isPending ? "…" : "Wallet"}
             </GradientButton>
           )}
 
