@@ -1,38 +1,45 @@
-# RIVER - Onchain Poker
+# mi River
 
-The first poker room where the house cannot see your cards. Powered by Inco FHE.
+Heads-up confidential Texas Hold'em on [Inco Lightning](https://docs.inco.org). Hole cards stay private until showdown. Live product for the Inco x Megapot Summer Game Jam.
 
-## Quick Start
+- **Live:** https://mi.sithunyein.com
+- **Repo:** https://github.com/thesithunyein/mi-river
+- **Network:** Base Sepolia (chain id 84532)
+- **Track:** Inco
 
-1. Clone and install
-   ```
-   git clone https://github.com/thesithunyein/river-poker.git
-   cd river-poker
-   npm install
-   ```
+## Why this is real
 
-2. Set up Supabase
-   - Create a project at supabase.com
-   - Enable Google OAuth provider
-   - Copy your URL and anon key
+- Shuffle and deal use Inco `shuffledRange` / `_dealTo` (see `contracts/src`).
+- Only your wallet can `attestedDecrypt` your hole cards.
+- Community cards are public via `reveal`.
+- Showdown verifies covalidator attestations on-chain, then pays the pot.
 
-3. Configure environment
-   ```
-   cp .env.local.template .env.local
-   # Add your Supabase credentials
-   ```
+Cosmetics and daily rewards are separate from fairness. They do not replace Inco.
 
-4. Run
-   ```
-   npm run dev
-   ```
+## Quick start
 
-## Tech Stack
-- Next.js 15
-- Supabase Auth (Google)
-- Tailwind CSS
-- Inco FHE (encrypted hole cards)
+```bash
+bun install
+cp .env.example .env.local
+# set NEXT_PUBLIC_WALLETCONNECT_ID
+# set NEXT_PUBLIC_RIVER_HOLDEM_ADDRESS after deploy
+bun run dev
+```
 
-## Deploy
+### Contracts
 
-Push to GitHub and connect to Vercel for automatic deployment.
+```bash
+cd contracts
+forge build
+forge script script/DeployRiverHoldem.s.sol:DeployRiverHoldem --rpc-url $BASE_SEPOLIA_RPC_URL --broadcast
+```
+
+Fund the deployer with Base Sepolia ETH. Prefund shuffle fees via `fundFees`.
+
+## Jam disclosure
+
+Built during Summer Game Jam week (created 7 Aug 2026). UI shell and contracts shipped in this repo. No pre-existing on-chain poker.
+
+## Stack
+
+Next.js 15, wagmi, RainbowKit, `@inco/lightning` + `@inco/lightning-js`, Foundry, Vercel.

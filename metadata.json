@@ -1,6 +1,6 @@
 {
-  "name": "RIVER | Onchain Poker",
-  "description": "Onchain poker app where the house cannot see your cards. Powered by Inco FHE.",
+  "name": "mi River",
+  "description": "mi River is a confidential Hold'em experience built for the Inco Summer Game Jam on Inco Lightning and Base Sepolia.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

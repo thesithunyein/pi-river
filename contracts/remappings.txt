@@ -1,0 +1,3 @@
+@inco/lightning/=../node_modules/@inco/lightning/
+@inco/=../node_modules/@inco/
+forge-std/=lib/forge-std/src/

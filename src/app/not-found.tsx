@@ -1,16 +1,19 @@
 import Link from "next/link";
+import { CardsIcon } from "@/components/icons";
 
 export default function NotFound() {
   return (
-    <div className="min-h-screen bg-river-bg text-white flex flex-col items-center justify-center p-6 text-center space-y-4">
-      <div className="text-6xl">🃏</div>
-      <h1 className="text-3xl font-black font-display text-river-gold">404 - Table Not Found</h1>
-      <p className="text-river-grey text-sm max-w-sm">
-        The poker table or page you are looking for does not exist or has been folded.
+    <div className="flex min-h-screen flex-col items-center justify-center space-y-4 px-6 text-center text-white">
+      <div className="flex h-20 w-20 items-center justify-center rounded-[28px] border border-river-line/20 bg-river-bg2/80 text-river-violet shadow-mi-panel">
+        <CardsIcon className="h-10 w-10" />
+      </div>
+      <h1 className="text-3xl font-black font-display text-river-white">Page not found</h1>
+      <p className="max-w-sm text-sm text-river-grey">
+        The table or screen you are looking for is not part of the current mi River shell.
       </p>
       <Link
         href="/"
-        className="px-6 py-3 rounded-2xl bg-gradient-to-r from-river-cyan to-blue-600 text-river-bg font-black text-sm shadow-lg hover:scale-105 transition"
+        className="brand-gradient rounded-2xl px-6 py-3 text-sm font-black text-slate-950 shadow-mi-glow transition hover:brightness-105 active:translate-y-px"
       >
         Return to Lobby
       </Link>

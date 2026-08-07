@@ -1,5 +1,5 @@
 {
-  "name": "river-poker",
+  "name": "mi-river",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -9,19 +9,27 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@inco/lightning-js": "^1.0.2",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
+    "@tanstack/react-query": "^5.101.4",
     "next": "^15.3.8",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "viem": "^2.55.11",
+    "wagmi": "2.19.5"
   },
   "devDependencies": {
+    "@inco/lightning": "^1.0.2",
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
     "@types/node": "^22.14.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "autoprefixer": "^10.4.20",
     "eslint": "^8.57.0",
     "eslint-config-next": "^15.0.0",
+    "forge-std": "^1.1.2",
+    "hardhat": "^3.12.0",
     "postcss": "^8.5.3",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3"

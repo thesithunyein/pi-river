@@ -1,14 +1,13 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import Image from "next/image";
 import { useState } from "react";
-import HowItWorksModal from "@/components/HowItWorksModal";
-import RiverLogo from "@/components/RiverLogo";
+import { LockIncoIcon, WalletIcon } from "@/components/icons";
 import { sound } from "@/lib/sound";
 
 export default function SignIn() {
   const [loading, setLoading] = useState(false);
-  const [showHowItWorks, setShowHowItWorks] = useState(false);
 
   async function signInWithGoogle() {
     sound.playClick();
@@ -52,37 +51,30 @@ export default function SignIn() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-4 bg-gradient-to-b from-river-bg2 via-river-bg to-black text-white relative overflow-hidden">
-      {/* Background glow effects */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-river-cyan/10 rounded-full blur-3xl pointer-events-none" />
-      <div className="absolute bottom-10 right-10 w-80 h-80 bg-river-gold/10 rounded-full blur-3xl pointer-events-none" />
-
-      <div className="w-full max-w-sm relative z-10 space-y-5 text-center">
-        {/* Brand Header */}
-        <div className="flex flex-col items-center justify-center animate-fade-in">
-          <div className="mb-2">
-            <RiverLogo size="lg" showText={false} />
+    <div className="flex min-h-screen items-center justify-center px-4 py-10">
+      <div className="w-full max-w-md space-y-5">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-4 flex h-20 w-20 items-center justify-center rounded-[28px] border border-river-line/20 bg-river-bg2/80 shadow-mi-panel">
+            <Image src="/brand/mi-mark.svg" alt="mi River mark" width={52} height={52} className="h-12 w-12" priority />
           </div>
-          <h1 className="font-display text-4xl font-black tracking-wider text-white drop-shadow-md">
-            RIVER <span className="text-river-cyan text-3xl font-extrabold">POKER</span>
-          </h1>
-          <p className="text-river-grey text-xs mt-1 font-bold uppercase tracking-widest">
-            Onchain Encrypted Hold&apos;em
+          <Image src="/brand/mi-logo.svg" alt="mi River" width={176} height={40} className="h-10 w-auto" />
+          <p className="mt-3 max-w-sm text-sm leading-7 text-river-grey">
+            Confidential Hold&apos;em UI for the Inco Summer Game Jam. Wallet and contract flows are still
+            being wired, so guest mode is the fastest way to explore the shell.
           </p>
         </div>
 
-        {/* Auth Container */}
-        <div className="bg-river-bg2/90 border border-river-line/80 rounded-3xl p-6 shadow-2xl backdrop-blur-xl space-y-4">
-          <div className="text-center">
-            <div className="text-sm font-black text-white">Welcome Player</div>
-            <div className="text-xs text-river-grey mt-0.5">Sign in to claim 100,000 free chips</div>
+        <div className="glass-panel space-y-4 rounded-[30px] border border-river-line/20 p-6 text-center">
+          <div>
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.22em] text-river-gold">Sign in</p>
+            <h1 className="mt-2 text-3xl font-black text-river-white">Enter mi River</h1>
+            <p className="mt-2 text-sm text-river-grey">Sign in or continue as guest to save a local progression run.</p>
           </div>
 
-          {/* Continue with Google */}
           <button
             onClick={signInWithGoogle}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 bg-white hover:bg-gray-100 text-gray-900 font-black rounded-2xl py-3.5 px-4 transition shadow-lg active:scale-98 disabled:opacity-50 text-xs uppercase tracking-wide cursor-pointer"
+            className="flex min-h-11 w-full items-center justify-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-xs font-black uppercase tracking-[0.16em] text-slate-900 transition hover:bg-slate-100 active:translate-y-px disabled:opacity-50"
           >
             <svg className="w-5 h-5 flex-shrink-0" viewBox="0 0 24 24">
               <path
@@ -105,49 +97,36 @@ export default function SignIn() {
             <span>{loading ? "Connecting..." : "Continue with Google"}</span>
           </button>
 
-          {/* Divider */}
           <div className="flex items-center gap-3 my-1">
             <div className="flex-1 h-px bg-river-line/60" />
             <span className="text-[10px] text-river-grey font-bold uppercase tracking-wider">OR</span>
             <div className="flex-1 h-px bg-river-line/60" />
           </div>
 
-          {/* Continue as Guest */}
           <button
             onClick={signInAsGuest}
-            className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-river-cyan to-blue-600 text-river-bg font-black rounded-2xl py-3.5 px-4 transition shadow-lg glow-cyan hover:scale-[1.01] active:scale-98 text-xs uppercase tracking-wide cursor-pointer"
+            className="brand-gradient flex min-h-11 w-full items-center justify-center gap-2 rounded-2xl px-4 py-3.5 text-xs font-black uppercase tracking-[0.16em] text-slate-950 shadow-mi-glow transition hover:brightness-105 active:translate-y-px"
           >
-            <span>⚡</span>
-            <span>Continue as Guest (Instant Play)</span>
+            <WalletIcon className="h-5 w-5" />
+            <span>Continue as guest</span>
           </button>
         </div>
 
-        {/* How River Works Guide */}
-        <div className="bg-river-bg3/60 border border-river-line/60 rounded-2xl p-4 text-center space-y-2 shadow-lg">
-          <div className="text-xs font-bold text-white flex items-center justify-center gap-1.5">
-            <span>🛡</span>
-            <span>Fair Play & Rules</span>
+        <div className="rounded-[26px] border border-river-line/20 bg-river-bg2/70 p-4 shadow-mi-panel">
+          <div className="flex items-start gap-3">
+            <span className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-river-violet/10 text-river-violet">
+              <LockIncoIcon className="h-5 w-5" />
+            </span>
+            <div className="text-left">
+              <p className="text-sm font-bold text-river-white">Network target</p>
+              <p className="mt-1 text-xs leading-6 text-river-grey">
+                Inco Lightning · Base Sepolia is the intended network for this project. The current shell does
+                not claim live onchain card privacy in the UI yet.
+              </p>
+            </div>
           </div>
-          <button
-            onClick={() => {
-              sound.playClick();
-              setShowHowItWorks(true);
-            }}
-            className="w-full py-2.5 rounded-xl bg-river-bg1/90 border border-river-cyan/40 text-river-cyan text-xs font-black hover:bg-river-cyan/10 transition flex items-center justify-center gap-1.5 cursor-pointer"
-          >
-            <span>🎓</span>
-            <span>How River Works (Guide & Rules)</span>
-          </button>
         </div>
-
-        {/* Footer */}
-        <p className="text-river-grey text-[10px] text-center font-medium">
-          Encrypted onchain poker with Inco FHE.
-        </p>
       </div>
-
-      {/* Interactive How It Works Modal */}
-      <HowItWorksModal isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
     </div>
   );
 }
