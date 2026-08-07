@@ -9,8 +9,8 @@ contract DeployRiverHoldem is Script {
         uint256 pk = vm.envUint("PRIVATE_KEY");
         vm.startBroadcast(pk);
         RiverHoldem game = new RiverHoldem();
-        // Prefund shuffle fees for first hands
-        game.fundFees{value: 0.05 ether}();
+        // Prefund shuffle fees for first hands (keep modest so faucet/bridge amounts work)
+        game.fundFees{value: 0.008 ether}();
         console2.log("RiverHoldem", address(game));
         vm.stopBroadcast();
     }
