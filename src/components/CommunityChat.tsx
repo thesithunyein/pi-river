@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { sound } from "@/lib/sound";
+import { getAvatarForPlayer } from "@/lib/avatars";
 
 export interface ChatMessage {
   id: string;
@@ -106,34 +107,37 @@ export default function CommunityChat({ isOpen, onToggle }: { isOpen?: boolean; 
 
       {/* Message Feed */}
       <div className="flex-1 overflow-y-auto p-3 space-y-2.5 scrollbar-thin">
-        {messages.map((m) => (
-          <div key={m.id} className="flex items-start gap-2 text-xs group">
-            <div
-              className={`w-7 h-7 rounded-full bg-gradient-to-br ${m.avatarBg} flex items-center justify-center font-bold text-white text-[10px] flex-shrink-0 shadow-sm`}
-            >
-              {m.sender[0]}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="font-bold text-river-white text-[11px]">{m.sender}</span>
-                {m.role === "admin" && (
-                  <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-extrabold px-1.5 py-0.2 rounded">
-                    Admin
-                  </span>
-                )}
-                {m.sender === "You" && (
-                  <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-extrabold px-1.5 py-0.2 rounded">
-                    You
-                  </span>
-                )}
-                <span className="text-[9px] text-river-grey/70 ml-auto">{m.time}</span>
+        {messages.map((m) => {
+          const avatar = getAvatarForPlayer(m.sender);
+          return (
+            <div key={m.id} className="flex items-start gap-2 text-xs group">
+              <div
+                className={`w-8 h-8 rounded-2xl bg-gradient-to-br ${avatar.gradient} border ${avatar.border} flex items-center justify-center font-bold text-white text-sm flex-shrink-0 shadow-md`}
+              >
+                <span>{avatar.emoji}</span>
               </div>
-              <div className="text-river-grey text-[11.5px] mt-0.5 leading-relaxed break-words bg-river-bg3/40 rounded-lg px-2.5 py-1.5 border border-river-line/40">
-                {m.text}
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="font-bold text-river-white text-[11px]">{m.sender}</span>
+                  {m.role === "admin" && (
+                    <span className="bg-purple-500/20 text-purple-300 border border-purple-500/40 text-[9px] font-extrabold px-1.5 py-0.2 rounded">
+                      Admin
+                    </span>
+                  )}
+                  {m.sender === "You" && (
+                    <span className="bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 text-[9px] font-extrabold px-1.5 py-0.2 rounded">
+                      You
+                    </span>
+                  )}
+                  <span className="text-[9px] text-river-grey/70 ml-auto">{m.time}</span>
+                </div>
+                <div className="text-river-grey text-[11.5px] mt-0.5 leading-relaxed break-words bg-river-bg3/40 rounded-lg px-2.5 py-1.5 border border-river-line/40">
+                  {m.text}
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={chatEndRef} />
       </div>
 

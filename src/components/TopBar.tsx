@@ -7,14 +7,16 @@ import { useState } from "react";
 import type { User } from "@supabase/supabase-js";
 import RiverLogo from "@/components/RiverLogo";
 import HowItWorksModal from "@/components/HowItWorksModal";
+import WalletModal from "@/components/WalletModal";
 import { useGame, AVATAR_OPTIONS } from "@/context/GameContext";
 import { sound } from "@/lib/sound";
 
 export default function TopBar({ user }: { user: User }) {
   const router = useRouter();
   const supabase = createClient();
-  const { chips, profile } = useGame();
+  const { chips, profile, walletAddress, isWalletConnected } = useGame();
   const [showGuide, setShowGuide] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
 
   const activeAvatar =
     AVATAR_OPTIONS.find((a) => a.id === profile.avatarId) || AVATAR_OPTIONS[0];
@@ -25,8 +27,7 @@ export default function TopBar({ user }: { user: User }) {
       document.cookie = "river_guest_mode=; path=/; max-age=0";
     }
     if (supabase) await supabase.auth.signOut();
-    router.push("/auth/signin");
-    router.refresh();
+    window.location.href = "/auth/signin";
   }
 
   return (
@@ -38,13 +39,34 @@ export default function TopBar({ user }: { user: User }) {
         </Link>
 
         <div className="flex items-center gap-2">
+          {/* Web3 Wallet Button */}
+          <button
+            onClick={() => {
+              sound.playClick();
+              setShowWallet(true);
+            }}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-black transition border ${
+              isWalletConnected && walletAddress
+                ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                : "bg-river-bg3/80 border-amber-500/40 text-amber-400 hover:bg-amber-500/10"
+            }`}
+            title="Web3 Wallet & Inco Network"
+          >
+            <span>🦊</span>
+            <span className="hidden xs:inline">
+              {isWalletConnected && walletAddress
+                ? `${walletAddress.slice(0, 5)}...`
+                : "Connect Wallet"}
+            </span>
+          </button>
+
           {/* How River Works Guide Trigger */}
           <button
             onClick={() => {
               sound.playClick();
               setShowGuide(true);
             }}
-            className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-river-bg3/80 border border-river-cyan/40 text-river-cyan hover:bg-river-cyan/20 transition text-[11px] font-black"
+            className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-river-bg3/80 border border-river-cyan/40 text-river-cyan hover:bg-river-cyan/20 transition text-[11px] font-black"
             title="How River Poker Works & Rules"
           >
             <span>🎓</span>
@@ -99,6 +121,7 @@ export default function TopBar({ user }: { user: User }) {
       </div>
 
       <HowItWorksModal isOpen={showGuide} onClose={() => setShowGuide(false)} />
+      <WalletModal isOpen={showWallet} onClose={() => setShowWallet(false)} />
     </>
   );
 }

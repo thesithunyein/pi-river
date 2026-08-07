@@ -1,8 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useGame } from "@/context/GameContext";
+import { useGame, AVATAR_OPTIONS } from "@/context/GameContext";
 import { sound } from "@/lib/sound";
+import { getAvatarForPlayer } from "@/lib/avatars";
+import IncoInspectorModal from "@/components/IncoInspectorModal";
+import CreateRoomModal from "@/components/CreateRoomModal";
+import { P2PRelay } from "@/lib/p2pRelay";
 import {
   createDeck,
   CardType,
@@ -33,7 +37,8 @@ const INITIAL_BOTS = [
 ];
 
 export default function TablePage() {
-  const { chips, recordHandResult, equippedCardBack, equippedTableFelt } = useGame();
+  const { chips, recordHandResult, equippedCardBack, equippedTableFelt, profile } = useGame();
+  const activeAvatar = AVATAR_OPTIONS.find((a) => a.id === profile.avatarId) || AVATAR_OPTIONS[0];
 
   const [deck, setDeck] = useState<CardType[]>([]);
   const [communityCards, setCommunityCards] = useState<CardType[]>([]);
@@ -46,6 +51,65 @@ export default function TablePage() {
   const [turnIndex, setTurnIndex] = useState<number>(0);
   const [tableLog, setTableLog] = useState<string>("Click DEAL HAND to start playing Texas Hold'em!");
   const [winningInfo, setWinningInfo] = useState<{ winnerName: string; handName: string; amount: number } | null>(null);
+  const [showIncoInspector, setShowIncoInspector] = useState<boolean>(false);
+  const [showCreateRoom, setShowCreateRoom] = useState<boolean>(false);
+  const [activeRoom, setActiveRoom] = useState<{ name: string; variant: string; blinds: string }>({
+    name: "Inco High Stakes Table",
+    variant: "No Limit Hold'em",
+    blinds: "20,000 / 40,000",
+  });
+  const [activeEmotes, setActiveEmotes] = useState<Record<string, string>>({});
+
+  // Load custom room from sessionStorage if present
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem("river_current_room");
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        setActiveRoom({
+          name: parsed.name || "Inco High Stakes Table",
+          variant: parsed.variant || "No Limit Hold'em",
+          blinds: parsed.blinds || "20,000 / 40,000",
+        });
+      }
+    } catch {
+      // Ignore fallback
+    }
+  }, []);
+
+  // P2P State Relay instance
+  const [p2p] = useState(() => new P2PRelay("inco-table-1"));
+
+  // Listen for P2P emotes & actions
+  useEffect(() => {
+    const unsubscribe = p2p.subscribe((evt) => {
+      if (evt.type === "EMOTE" && evt.payload?.emoji && evt.payload?.playerId) {
+        sound.playChip();
+        setActiveEmotes((prev) => ({ ...prev, [evt.payload.playerId]: evt.payload.emoji }));
+        setTimeout(() => {
+          setActiveEmotes((prev) => {
+            const next = { ...prev };
+            delete next[evt.payload.playerId];
+            return next;
+          });
+        }, 2500);
+      }
+    });
+    return () => unsubscribe();
+  }, [p2p]);
+
+  const sendEmote = (playerId: string, emoji: string) => {
+    sound.playChip();
+    p2p.broadcast("EMOTE", "s-you", profile.displayName, { playerId, emoji });
+    setActiveEmotes((prev) => ({ ...prev, [playerId]: emoji }));
+    setTimeout(() => {
+      setActiveEmotes((prev) => {
+        const next = { ...prev };
+        delete next[playerId];
+        return next;
+      });
+    }, 2500);
+  };
 
   // Table felt color mapping
   const feltColorMap: Record<string, { bg: string; border: string }> = {
@@ -386,22 +450,48 @@ export default function TablePage() {
   return (
     <div className="p-3 sm:p-5 animate-fade-in space-y-4 max-w-4xl mx-auto">
       {/* Table Status Bar */}
-      <div className="flex items-center justify-between bg-river-bg2/90 border border-river-line/80 rounded-2xl px-4 py-2.5 shadow-md">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between flex-wrap gap-2 bg-river-bg2/90 border border-river-line/80 rounded-2xl px-4 py-2.5 shadow-md">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="w-2.5 h-2.5 rounded-full bg-river-green animate-ping" />
           <span className="font-bold text-xs text-white uppercase tracking-wider">
-            Texas Hold&apos;em · No Limit
+            {activeRoom.name}
           </span>
-          <span className="bg-river-cyan/20 text-river-cyan text-[10px] font-black px-2 py-0.5 rounded-full">
+          <span className="text-[10px] text-river-grey font-bold">
+            ({activeRoom.variant} · {activeRoom.blinds})
+          </span>
+          <span className="bg-river-cyan/20 text-river-cyan text-[10px] font-black px-2 py-0.5 rounded-full border border-river-cyan/30">
             Stage: {gameStage.toUpperCase()}
           </span>
         </div>
-        <button
-          onClick={startNewHand}
-          className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-river-cyan to-blue-600 text-river-bg font-black text-xs glow-cyan hover:scale-105 active:scale-95 transition-all shadow"
-        >
-          🔄 NEW HAND
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              sound.playClick();
+              setShowCreateRoom(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-river-bg3 hover:bg-river-bg1 border border-river-cyan/40 text-river-cyan font-black text-[11px] transition flex items-center gap-1 cursor-pointer"
+            title="Create Custom Poker Room"
+          >
+            <span>🎲</span>
+            <span>Create Room</span>
+          </button>
+          <button
+            onClick={() => {
+              sound.playClick();
+              setShowIncoInspector(true);
+            }}
+            className="px-3 py-1.5 rounded-xl bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 font-black text-[11px] transition flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>🔒</span>
+            <span>FHE Inspector</span>
+          </button>
+          <button
+            onClick={startNewHand}
+            className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-river-cyan to-blue-600 text-river-bg font-black text-xs glow-cyan hover:scale-105 active:scale-95 transition-all shadow cursor-pointer"
+          >
+            🔄 NEW HAND
+          </button>
+        </div>
       </div>
 
       {/* Main Poker Table Canvas */}
@@ -471,6 +561,11 @@ export default function TablePage() {
         {/* Player Seats */}
         {players.map((s) => {
           const isCurrentTurn = turnIndex === players.indexOf(s) && gameStage !== "showdown";
+          const avatarInfo = s.isYou
+            ? { emoji: activeAvatar.emoji, gradient: activeAvatar.bgGradient, border: activeAvatar.borderColor }
+            : getAvatarForPlayer(s.name);
+          const activeEmote = activeEmotes[s.id];
+
           return (
             <div
               key={s.id}
@@ -486,19 +581,26 @@ export default function TablePage() {
                   : "bottom-1 sm:bottom-3 left-[41%]"
               } ${s.folded ? "opacity-40 grayscale" : ""}`}
             >
+              {/* Floating Emote Reaction Bubble */}
+              {activeEmote && (
+                <div className="absolute -top-10 z-50 animate-bounce bg-black/90 border border-river-cyan/60 px-3 py-1 rounded-2xl text-xl shadow-[0_0_20px_rgba(34,211,238,0.5)] flex items-center justify-center pointer-events-none">
+                  <span>{activeEmote}</span>
+                </div>
+              )}
+
               <div
                 className={`relative w-11 h-11 sm:w-14 sm:h-14 rounded-full border-[3px] flex items-center justify-center font-black text-xs sm:text-base text-white shadow-xl ${
                   s.isYou
                     ? "border-river-cyan shadow-[0_0_20px_rgba(34,211,238,0.6)]"
                     : isCurrentTurn
                     ? "border-river-gold shadow-[0_0_20px_rgba(251,191,36,0.6)] animate-pulse"
-                    : "border-white/20"
-                } bg-gradient-to-br ${s.avatarGradient}`}
+                    : avatarInfo.border || "border-white/20"
+                } bg-gradient-to-br ${avatarInfo.gradient}`}
               >
                 {isCurrentTurn && (
                   <div className="absolute -inset-[5px] rounded-full border-[3px] border-transparent border-t-river-gold animate-spin" />
                 )}
-                {s.name[0]}
+                <span className="text-xl sm:text-2xl drop-shadow">{avatarInfo.emoji}</span>
                 {s.isDealer && (
                   <div className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-white text-[9px] font-black text-river-bg flex items-center justify-center shadow-lg border border-gray-300">
                     D
@@ -583,7 +685,7 @@ export default function TablePage() {
         </div>
 
         {/* Bet Amount Slider & Presets */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap border-b border-river-line/40 pb-2.5">
           <span className="text-[10px] text-river-grey uppercase tracking-wider font-black">Bet Presets:</span>
           {presets.map((p) => (
             <button
@@ -615,6 +717,40 @@ export default function TablePage() {
             {betAmount.toLocaleString()}
           </div>
         </div>
+
+        {/* Live Table Emote / Reaction Toolbar */}
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] text-river-grey uppercase font-extrabold flex items-center gap-1">
+              <span>💬</span>
+              <span>Reactions:</span>
+            </span>
+            {["🚀", "🔥", "💩", "🤡", "👏", "🤑", "🍺", "💸", "👑", "🤬"].map((emo) => (
+              <button
+                key={emo}
+                onClick={() => {
+                  sendEmote("s-you", emo);
+                  // Trigger a random bot response 40% of time
+                  if (Math.random() > 0.6) {
+                    const randomBot = INITIAL_BOTS[Math.floor(Math.random() * INITIAL_BOTS.length)];
+                    const botResponses = ["🔥", "👏", "🤡", "💩", "🤑"];
+                    const randomEmo = botResponses[Math.floor(Math.random() * botResponses.length)];
+                    setTimeout(() => sendEmote(randomBot.id, randomEmo), 800);
+                  }
+                }}
+                className="w-7 h-7 sm:w-8 sm:h-8 rounded-xl bg-river-bg2 hover:bg-river-bg3 border border-river-line/80 hover:border-river-cyan text-sm sm:text-base flex items-center justify-center hover:scale-115 active:scale-90 transition cursor-pointer shadow-sm"
+                title={`Send ${emo} Reaction to Table`}
+              >
+                {emo}
+              </button>
+            ))}
+          </div>
+
+          <div className="text-[10px] text-river-cyan font-bold flex items-center gap-1">
+            <span className="w-1.5 h-1.5 rounded-full bg-river-cyan animate-ping" />
+            <span>Live Table Broadcast Active</span>
+          </div>
+        </div>
       </div>
 
       {/* Encrypted Trust Notice */}
@@ -627,6 +763,20 @@ export default function TablePage() {
           Cards are <b className="text-river-white">encrypted onchain via Inco FHE</b>. Zero house peek capability.
         </span>
       </div>
+
+      {/* Inco FHE Ciphertext Inspector Modal */}
+      <IncoInspectorModal
+        isOpen={showIncoInspector}
+        onClose={() => setShowIncoInspector(false)}
+        userCards={userPlayer?.cards || []}
+        gameStage={gameStage}
+      />
+
+      {/* Create Custom Room Modal */}
+      <CreateRoomModal
+        isOpen={showCreateRoom}
+        onClose={() => setShowCreateRoom(false)}
+      />
     </div>
   );
 }

@@ -6,8 +6,10 @@ import LiveBetsTicker from "@/components/LiveBetsTicker";
 import CommunityChat from "@/components/CommunityChat";
 import DailyBonusModal from "@/components/DailyBonusModal";
 import HowItWorksModal from "@/components/HowItWorksModal";
+import CreateRoomModal from "@/components/CreateRoomModal";
 import RiverLogo from "@/components/RiverLogo";
 import { sound } from "@/lib/sound";
+import { getAvatarForPlayer } from "@/lib/avatars";
 
 const GAME_MODES = [
   { id: "heads-up", name: "Heads-Up Rush", category: "Quick Match", type: "Quick Match", stake: "20 / 40", players: 1204, gradient: "from-blue-900 via-blue-950 to-river-bg2", emoji: "🃏", badge: "FAST" },
@@ -19,10 +21,10 @@ const GAME_MODES = [
 ];
 
 const WINNERS = [
-  { name: "Kenji", hand: "Full House, Kings full", amount: "+45,000", color: "from-cyan-500 to-cyan-700" },
-  { name: "Pia", hand: "Flush, Ace high", amount: "+120,000", color: "from-pink-500 to-pink-700" },
-  { name: "Maya", hand: "Straight, Ten high", amount: "+28,000", color: "from-amber-500 to-amber-700" },
-  { name: "Alex", hand: "Two Pair, Aces and Kings", amount: "+15,000", color: "from-violet-500 to-violet-700" },
+  { name: "Kenji", hand: "Full House, Kings full", amount: "+45,000" },
+  { name: "Pia", hand: "Flush, Ace high", amount: "+120,000" },
+  { name: "Maya", hand: "Straight, Ten high", amount: "+28,000" },
+  { name: "Alex", hand: "Two Pair, Aces and Kings", amount: "+15,000" },
 ];
 
 const FILTERS = ["All games", "Quick Match", "Tournaments", "High Stakes", "Short Deck"];
@@ -32,6 +34,7 @@ export default function LobbyPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [bonusModalOpen, setBonusModalOpen] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
 
   const filteredGames = GAME_MODES.filter((g) => {
     const matchesFilter = activeFilter === "All games" || g.category === activeFilter;
@@ -74,6 +77,17 @@ export default function LobbyPage() {
                 >
                   <span>CLAIM 100,000 CHIPS</span>
                   <span className="text-base">✨</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    sound.playClick();
+                    setShowCreateRoom(true);
+                  }}
+                  className="bg-gradient-to-r from-river-cyan to-blue-600 text-river-bg font-black rounded-2xl py-3 px-5 text-xs sm:text-sm glow-cyan hover:scale-105 active:scale-95 transition flex items-center gap-1.5 shadow-lg"
+                >
+                  <span>🎲</span>
+                  <span>Create Custom Room</span>
                 </button>
 
                 <button
@@ -243,18 +257,21 @@ export default function LobbyPage() {
             </span>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2.5">
-            {WINNERS.map((w, i) => (
-              <div key={i} className="flex items-center gap-3 p-2.5 rounded-2xl bg-river-bg3/50 border border-river-line/50">
-                <div className={`w-9 h-9 rounded-full bg-gradient-to-br ${w.color} flex items-center justify-center text-xs font-black text-river-bg shadow-sm flex-shrink-0`}>
-                  {w.name[0]}
+            {WINNERS.map((w, i) => {
+              const avatar = getAvatarForPlayer(w.name);
+              return (
+                <div key={i} className="flex items-center gap-3 p-2.5 rounded-2xl bg-river-bg3/50 border border-river-line/50">
+                  <div className={`w-10 h-10 rounded-2xl bg-gradient-to-br ${avatar.gradient} border ${avatar.border} flex items-center justify-center text-lg shadow-sm flex-shrink-0`}>
+                    <span>{avatar.emoji}</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs font-bold text-white">{w.name}</div>
+                    <div className="text-[10px] text-river-grey truncate">{w.hand}</div>
+                    <div className="text-xs font-black text-river-gold">{w.amount} chips</div>
+                  </div>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs font-bold text-white">{w.name}</div>
-                  <div className="text-[10px] text-river-grey truncate">{w.hand}</div>
-                  <div className="text-xs font-black text-river-gold">{w.amount} chips</div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       </div>
@@ -264,6 +281,9 @@ export default function LobbyPage() {
 
       {/* How River Works Interactive Modal */}
       <HowItWorksModal isOpen={showHowItWorks} onClose={() => setShowHowItWorks(false)} />
+
+      {/* Create Room Modal */}
+      <CreateRoomModal isOpen={showCreateRoom} onClose={() => setShowCreateRoom(false)} />
     </div>
   );
 }

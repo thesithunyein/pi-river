@@ -39,8 +39,7 @@ export default function ProfilePage() {
       document.cookie = "river_guest_mode=; path=/; max-age=0";
     }
     if (supabase) await supabase.auth.signOut();
-    router.push("/auth/signin");
-    router.refresh();
+    window.location.href = "/auth/signin";
   }
 
   const toggleSound = () => {

@@ -15,33 +15,29 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const cookieStore = await cookies();
   const isGuestMode = cookieStore.get("river_guest_mode")?.value === "true";
 
-  const supabase = await createClient();
+  let activeUser = isGuestMode ? GUEST_USER : null;
 
-  // If Supabase is not configured or user clicked Continue with Guest
-  if (!supabase || isGuestMode) {
-    return (
-      <GameProvider>
-        <div className="min-h-screen flex flex-col max-w-[960px] mx-auto bg-gradient-to-b from-river-bg1 to-river-bg border-x border-river-line shadow-2xl relative">
-          <TopBar user={GUEST_USER} />
-          <main className="flex-1 overflow-y-auto pb-20">{children}</main>
-          <BottomNav />
-        </div>
-      </GameProvider>
-    );
+  if (!activeUser) {
+    const supabase = await createClient();
+    if (supabase) {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        activeUser = user;
+      }
+    }
   }
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
+  // If user is neither logged in with Google nor entered as Guest, force Auth & Onboarding page
+  if (!activeUser) {
     redirect("/auth/signin");
   }
 
   return (
     <GameProvider>
       <div className="min-h-screen flex flex-col max-w-[960px] mx-auto bg-gradient-to-b from-river-bg1 to-river-bg border-x border-river-line shadow-2xl relative">
-        <TopBar user={user} />
+        <TopBar user={activeUser} />
         <main className="flex-1 overflow-y-auto pb-20">{children}</main>
         <BottomNav />
       </div>

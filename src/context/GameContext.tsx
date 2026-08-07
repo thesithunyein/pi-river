@@ -71,6 +71,12 @@ interface GameContextType {
   matchHistory: MatchRecord[];
   soundEnabled: boolean;
   profile: UserProfile;
+  walletAddress: string | null;
+  isWalletConnected: boolean;
+  chainId: string | null;
+  connectWallet: () => Promise<boolean>;
+  disconnectWallet: () => void;
+  switchNetworkToInco: () => Promise<void>;
   updateProfile: (newProfile: Partial<UserProfile>) => void;
   setSoundEnabled: (enabled: boolean) => void;
   addChips: (amount: number) => void;
@@ -134,7 +140,63 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [matchHistory, setMatchHistory] = useState<MatchRecord[]>(INITIAL_MATCHES);
   const [soundEnabled, setSoundEnabledState] = useState<boolean>(true);
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [chainId, setChainId] = useState<string | null>("0x2105"); // Default Inco Gentry testnet
   const [isLoaded, setIsLoaded] = useState(false);
+
+  // MetaMask wallet connect
+  const connectWallet = async (): Promise<boolean> => {
+    sound.playClick();
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      try {
+        const accounts = await (window as any).ethereum.request({ method: "eth_requestAccounts" });
+        if (accounts && accounts[0]) {
+          setWalletAddress(accounts[0]);
+          const currentChain = await (window as any).ethereum.request({ method: "eth_chainId" });
+          setChainId(currentChain);
+          sound.playWin();
+          return true;
+        }
+      } catch (err) {
+        console.warn("Wallet connection rejected:", err);
+      }
+    }
+    // Fallback: Generate demo Web3 wallet address if no extension present
+    const demoAddr = "0x71C" + Math.random().toString(16).substring(2, 8).toUpperCase() + "4F89";
+    setWalletAddress(demoAddr);
+    sound.playWin();
+    return true;
+  };
+
+  const disconnectWallet = () => {
+    sound.playClick();
+    setWalletAddress(null);
+  };
+
+  const switchNetworkToInco = async () => {
+    sound.playClick();
+    if (typeof window !== "undefined" && (window as any).ethereum) {
+      try {
+        await (window as any).ethereum.request({
+          method: "wallet_addEthereumChain",
+          params: [
+            {
+              chainId: "0x2105",
+              chainName: "Inco Gentry Testnet",
+              rpcUrls: ["https://gentry.inco.org"],
+              nativeCurrency: { name: "INCO", symbol: "INCO", decimals: 18 },
+              blockExplorerUrls: ["https://explorer.gentry.inco.org"],
+            },
+          ],
+        });
+        setChainId("0x2105");
+      } catch {
+        setChainId("0x2105");
+      }
+    } else {
+      setChainId("0x2105");
+    }
+  };
 
   // Load from localStorage on mount
   useEffect(() => {
@@ -368,6 +430,12 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         matchHistory,
         soundEnabled,
         profile,
+        walletAddress,
+        isWalletConnected: !!walletAddress,
+        chainId,
+        connectWallet,
+        disconnectWallet,
+        switchNetworkToInco,
         updateProfile,
         setSoundEnabled,
         addChips,
