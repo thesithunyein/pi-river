@@ -86,10 +86,7 @@ function EntryScreen({
             className="h-[88px] w-[88px] rounded-[28px] shadow-[0_16px_40px_rgba(245,197,24,0.35)]"
             priority
           />
-          <p className="mt-4 font-display text-2xl font-black tracking-tight text-white">
-            pi <span className="text-[#F5C518]">River</span>
-          </p>
-          <h1 className="mt-3 font-display text-3xl font-black text-white">Welcome in</h1>
+          <h1 className="mt-5 font-display text-3xl font-black text-white">Welcome in</h1>
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#9AA0B4]">
             Sign in with Google, or connect a wallet. You can link both later under Profile. One account, one seat.
           </p>
