@@ -265,8 +265,8 @@ export default function OnchainTablePage() {
   if (!RIVER_HOLDEM_ADDRESS) {
     return (
       <GlassCard className="p-6">
-        <p className="font-bold text-river-orange">
-          Missing NEXT_PUBLIC_RIVER_HOLDEM_ADDRESS. Deploy the contract first.
+        <p className="font-bold text-[#F5C518]">
+          Tables are warming up. Check back after the next deploy.
         </p>
       </GlassCard>
     );

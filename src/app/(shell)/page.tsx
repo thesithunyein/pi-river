@@ -9,10 +9,15 @@ import {
   useWaitForTransactionReceipt,
   usePublicClient,
 } from "wagmi";
-import { BoltIcon, CardsIcon, GiftIcon, LockIncoIcon, TrophyIcon } from "@/components/icons";
-import { GlassCard } from "@/components/ui/GlassCard";
+import {
+  BoltIcon,
+  CardsIcon,
+  LockIncoIcon,
+  SpadeIcon,
+  TableIcon,
+  TrophyIcon,
+} from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
-import { SectionHeader } from "@/components/ui/SectionHeader";
 import { RIVER_HOLDEM_ADDRESS, riverHoldemAbi } from "@/lib/contracts/riverHoldem";
 
 const BUY_IN = parseEther("0.001");
@@ -31,16 +36,16 @@ export default function LobbyPage() {
   const contractReady = Boolean(RIVER_HOLDEM_ADDRESS);
 
   async function createTable() {
-    if (!contractReady) {
-      setStatus("Contract address missing. Deploy RiverHoldem to Base Sepolia first.");
+    if (!isConnected) {
+      setStatus("Connect your wallet to sit down.");
       return;
     }
-    if (!isConnected) {
-      setStatus("Connect a Base Sepolia wallet first.");
+    if (!contractReady) {
+      setStatus("Tables open soon. Contract deploy is finishing.");
       return;
     }
     try {
-      setStatus("Creating table on Base Sepolia...");
+      setStatus("Opening your table…");
       const hash = await writeContractAsync({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
@@ -62,36 +67,35 @@ export default function LobbyPage() {
             break;
           }
         } catch {
-          // skip unrelated logs
+          // skip
         }
       }
       if (tableId === undefined) {
-        setStatus("Table created but id not found in logs. Check explorer.");
+        setStatus("Table opened. Check your wallet activity for the id.");
         return;
       }
-      setStatus(`Table #${tableId.toString()} created. Waiting for opponent.`);
       router.push(`/table/${tableId.toString()}`);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Create failed");
+      setStatus(err instanceof Error ? err.message : "Could not create table");
     }
   }
 
   async function joinTable() {
-    if (!contractReady) {
-      setStatus("Contract address missing. Deploy RiverHoldem to Base Sepolia first.");
+    if (!isConnected) {
+      setStatus("Connect your wallet to join.");
       return;
     }
-    if (!isConnected) {
-      setStatus("Connect a Base Sepolia wallet first.");
+    if (!contractReady) {
+      setStatus("Tables open soon. Contract deploy is finishing.");
       return;
     }
     const id = BigInt(joinId || "0");
     if (id <= 0n) {
-      setStatus("Enter a valid table id.");
+      setStatus("Enter a table number from your opponent.");
       return;
     }
     try {
-      setStatus(`Joining table #${id.toString()}...`);
+      setStatus(`Joining table #${id.toString()}…`);
       const hash = await writeContractAsync({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
@@ -103,42 +107,60 @@ export default function LobbyPage() {
       await publicClient!.waitForTransactionReceipt({ hash });
       router.push(`/table/${id.toString()}`);
     } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Join failed");
+      setStatus(err instanceof Error ? err.message : "Could not join table");
     }
   }
 
   return (
-    <div className="space-y-6">
-      <GlassCard accent="purple" className="relative overflow-hidden p-6 sm:p-8">
-        <div className="absolute inset-y-0 right-0 w-40 bg-gradient-to-l from-river-gold/10 to-transparent" aria-hidden />
-        <div className="relative space-y-5">
-          <span className="inline-flex min-h-10 items-center rounded-full border border-river-gold/20 bg-river-gold/10 px-4 text-[11px] font-extrabold uppercase tracking-[0.22em] text-river-gold">
-            Inco Summer Game Jam
-          </span>
-          <h1 className="max-w-xl text-4xl font-black leading-tight text-river-white sm:text-5xl">
-            Heads-up Hold&apos;em where only you can see your cards.
-          </h1>
-          <p className="max-w-prose text-sm leading-7 text-river-grey sm:text-base">
-            mi River deals hole cards with Inco Lightning on Base Sepolia. The board is public.
-            Showdown settles with covalidator attestations. Buy-in is 0.001 ETH on testnet.
+    <div className="space-y-5">
+      {/* Hero felt */}
+      <section className="relative overflow-hidden rounded-[32px] border border-[#2a6b4a]/50 bg-[radial-gradient(ellipse_at_center,#1b6b45_0%,#0d3a28_55%,#071a14_100%)] px-5 pb-6 pt-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:px-8">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.12]"
+          style={{
+            backgroundImage:
+              "radial-gradient(circle at 20% 20%, #fff 0 1px, transparent 1px), radial-gradient(circle at 80% 60%, #fff 0 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+        <div className="relative mx-auto flex max-w-lg flex-col items-center text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-[#F5C518] text-[#14100a] shadow-[0_12px_40px_rgba(245,197,24,0.35)]">
+            <SpadeIcon className="h-9 w-9" />
+          </div>
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-[#9dceb4]">
+            Heads-up · Private hole cards
           </p>
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <h1 className="font-display text-4xl font-black leading-[1.05] text-white sm:text-5xl">
+            Sit down.
+            <br />
+            <span className="text-[#F5C518]">Keep your hand.</span>
+          </h1>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-[#b7d7c6]">
+            Two players. Encrypted hole cards on Inco Lightning. Public board.
+            Winner takes the pot on Base Sepolia.
+          </p>
+
+          <div className="mt-6 flex w-full flex-col gap-3">
             <GradientButton
+              className="w-full min-h-14 text-base"
               icon={<BoltIcon className="h-5 w-5" />}
               onClick={createTable}
               disabled={isPending}
             >
-              {isPending ? "Confirm in wallet" : "Create table (0.001 ETH)"}
+              {isPending ? "Confirm in wallet…" : "Create table · 0.001 ETH"}
             </GradientButton>
-            <div className="flex flex-1 gap-2">
+
+            <div className="flex gap-2">
               <input
                 value={joinId}
                 onChange={(e) => setJoinId(e.target.value.replace(/[^\d]/g, ""))}
-                placeholder="Table id"
-                className="min-h-12 flex-1 rounded-2xl border border-river-line/25 bg-river-bg1/80 px-4 text-sm font-bold text-river-white outline-none focus:border-river-gold/40"
+                placeholder="Table #"
+                inputMode="numeric"
+                className="min-h-14 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 text-center text-base font-bold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
               />
               <GradientButton
                 variant="secondary"
+                className="min-h-14 min-w-[7.5rem] border-white/15 bg-black/30"
                 icon={<CardsIcon className="h-5 w-5" />}
                 onClick={joinTable}
                 disabled={isPending}
@@ -147,39 +169,60 @@ export default function LobbyPage() {
               </GradientButton>
             </div>
           </div>
+
           {status ? (
-            <p className="text-sm font-semibold text-river-cyan">{status}</p>
-          ) : null}
-          {!contractReady ? (
-            <p className="text-xs text-river-orange">
-              Set NEXT_PUBLIC_RIVER_HOLDEM_ADDRESS after deploying contracts/src/RiverHoldem.sol.
-            </p>
+            <p className="mt-3 text-sm font-semibold text-[#F5C518]">{status}</p>
           ) : null}
         </div>
-      </GlassCard>
+      </section>
 
-      <SectionHeader
-        eyebrow="Why mi River"
-        title="Built for real play, not a mock demo"
-        description="Hidden hole cards, public board, attested settlement. Cosmetics and daily rewards stay off the critical fairness path."
-      />
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* How it plays */}
+      <section className="grid gap-3 sm:grid-cols-3">
         {[
-          { label: "Privacy", value: "Inco hole cards", icon: LockIncoIcon },
-          { label: "Stakes", value: "0.001 ETH buy-in", icon: TrophyIcon },
-          { label: "Rewards", value: "Daily cosmetics", icon: GiftIcon },
-          { label: "Network", value: "Base Sepolia", icon: BoltIcon },
-        ].map(({ label, value, icon: Icon }) => (
-          <GlassCard key={label} className="p-4">
-            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-river-violet/12 text-river-violet">
+          {
+            icon: LockIncoIcon,
+            title: "Private cards",
+            body: "Only your wallet can decrypt your hole cards.",
+          },
+          {
+            icon: TableIcon,
+            title: "Public board",
+            body: "Flop, turn, and river reveal for both players.",
+          },
+          {
+            icon: TrophyIcon,
+            title: "On-chain settle",
+            body: "Showdown verifies attestations, then pays the pot.",
+          },
+        ].map(({ icon: Icon, title, body }) => (
+          <div
+            key={title}
+            className="rounded-[24px] border border-white/8 bg-[#161322]/90 p-4 shadow-[0_12px_40px_rgba(0,0,0,0.25)]"
+          >
+            <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F5C518]/12 text-[#F5C518]">
               <Icon className="h-5 w-5" />
             </div>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-river-grey">{label}</p>
-            <p className="mt-1 text-sm font-bold text-river-white">{value}</p>
-          </GlassCard>
+            <h2 className="text-base font-black text-white">{title}</h2>
+            <p className="mt-1 text-sm leading-relaxed text-[#9AA0B4]">{body}</p>
+          </div>
         ))}
-      </div>
+      </section>
+
+      <section className="rounded-[24px] border border-white/8 bg-[#161322]/90 p-4">
+        <div className="flex items-start gap-3">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[#7B5CFF]/15 text-[#B9A8FF]">
+            <TableIcon className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-base font-black text-white">Quick rules</h2>
+            <ul className="mt-2 space-y-1.5 text-sm leading-relaxed text-[#9AA0B4]">
+              <li>1. Connect a Base Sepolia wallet</li>
+              <li>2. Create a table or join with a table number</li>
+              <li>3. Play heads-up. Cash out when the hand settles</li>
+            </ul>
+          </div>
+        </div>
+      </section>
     </div>
   );
 }

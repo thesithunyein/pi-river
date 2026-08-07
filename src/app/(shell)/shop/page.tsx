@@ -46,9 +46,9 @@ export default function ShopPage() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow="Shop"
-        title="Clothings and accessories"
-        description="Unlock premium card backs and felt sets with local chip balances. Cosmetics persist in game state and style the table route."
+        eyebrow="Locker"
+        title="Style your table"
+        description="Spend chips on card backs and felt. Pure cosmetics. Fairness stays on-chain."
       />
 
       {notice ? (
@@ -84,9 +84,9 @@ export default function ShopPage() {
 
       <GlassCard className="space-y-5">
         <SectionHeader
-          eyebrow="Clothings"
+          eyebrow="Deck"
           title="Card backs"
-          description="Each back changes the hidden card treatment on the table."
+          description="Pick the back your opponents see while your hand stays private."
         />
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {cardBacks.map((item) => {
@@ -144,9 +144,9 @@ export default function ShopPage() {
 
       <GlassCard className="space-y-5">
         <SectionHeader
-          eyebrow="Accessories"
+          eyebrow="Room"
           title="Table felts"
-          description="Felt themes set the mood for the `/table` experience."
+          description="Change the felt under every hand."
         />
         <div className="grid gap-4 md:grid-cols-2">
           {tableFelts.map((item) => {

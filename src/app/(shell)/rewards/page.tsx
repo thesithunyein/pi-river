@@ -33,9 +33,9 @@ export default function RewardsPage() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow="Rewards"
-        title="Daily reward grid"
-        description="Claim once every 24 hours to move through the 16 day progression track."
+        eyebrow="Daily"
+        title="Claim your streak"
+        description="One claim every 24 hours. Climb the 16-day board for bigger chip drops."
       />
 
       {notice ? (

@@ -6,7 +6,6 @@ import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { CoinIcon, WalletIcon } from "@/components/icons";
 import { useGame } from "@/context/GameContext";
-import { CurrencyPill } from "@/components/ui/CurrencyPill";
 import { GradientButton } from "@/components/ui/GradientButton";
 
 export function TopBar() {
@@ -16,34 +15,36 @@ export function TopBar() {
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
 
-  const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "";
+  const short = address ? `${address.slice(0, 4)}…${address.slice(-4)}` : "";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-river-line/15 bg-river-bg/70 backdrop-blur-2xl">
+    <header className="sticky top-0 z-40 border-b border-white/5 bg-[#0B0A14]/80 backdrop-blur-xl">
       <div className="mx-auto flex w-full max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
-        <Link
-          href="/"
-          className="flex min-h-11 items-center gap-3 rounded-2xl pr-2 text-left text-river-white transition hover:opacity-95"
-        >
-          <Image src="/brand/mi-mark.svg" alt="mi" width={40} height={40} className="h-10 w-10" />
-          <div className="min-w-0">
-            <p className="font-display text-lg font-black tracking-tight text-river-white">
-              mi <span className="text-river-gold">River</span>
+        <Link href="/" className="flex min-h-11 items-center gap-2.5">
+          <Image
+            src="/brand/mi-mark.svg"
+            alt="mi"
+            width={40}
+            height={40}
+            className="h-10 w-10 rounded-xl shadow-[0_0_0_1px_rgba(245,197,24,0.35)]"
+            priority
+          />
+          <div className="min-w-0 leading-tight">
+            <p className="font-display text-[17px] font-black tracking-tight text-white">
+              mi <span className="text-[#F5C518]">River</span>
             </p>
-            <p className="text-[11px] uppercase tracking-[0.18em] text-river-grey">
-              Inco Lightning · Base Sepolia
+            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#7d8398]">
+              Base Sepolia
             </p>
           </div>
         </Link>
 
         <div className="ml-auto flex items-center gap-2">
-          <div className="hidden sm:block">
-            <CurrencyPill
-              icon={<CoinIcon className="h-5 w-5" />}
-              label="Cosmetics"
-              value={chips.toLocaleString()}
-              tone="gold"
-            />
+          <div className="hidden items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 sm:flex">
+            <CoinIcon className="h-4 w-4 text-[#F5C518]" />
+            <span className="font-mono text-sm font-bold tabular-nums text-white">
+              {chips.toLocaleString()}
+            </span>
           </div>
 
           {isConnected ? (
@@ -51,37 +52,38 @@ export function TopBar() {
               {chainId !== baseSepolia.id ? (
                 <GradientButton
                   variant="secondary"
+                  className="min-h-10 px-3 text-xs"
                   onClick={() => switchChain({ chainId: baseSepolia.id })}
                 >
-                  Switch to Base Sepolia
+                  Switch network
                 </GradientButton>
               ) : null}
-              <GradientButton
-                variant="secondary"
-                icon={<WalletIcon className="h-5 w-5" />}
+              <button
+                type="button"
                 onClick={() => disconnect()}
+                className="inline-flex min-h-10 items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 text-xs font-bold text-white transition hover:bg-white/10"
               >
+                <WalletIcon className="h-4 w-4 text-[#F5C518]" />
                 {short}
-              </GradientButton>
+              </button>
             </>
           ) : (
             <GradientButton
-              icon={<WalletIcon className="h-5 w-5" />}
+              className="min-h-10 px-4 text-xs"
+              icon={<WalletIcon className="h-4 w-4" />}
               disabled={isPending}
               onClick={() => connect({ connector: connectors[0] })}
             >
-              {isPending ? "Connecting…" : "Connect wallet"}
+              {isPending ? "…" : "Connect"}
             </GradientButton>
           )}
 
           <Link
             href="/profile"
-            className="flex min-h-11 min-w-11 items-center justify-center rounded-2xl border border-river-line/20 bg-river-bg2/85 px-3 text-sm font-bold text-river-white shadow-mi-panel transition hover:border-river-violet/30"
-            aria-label="Open profile"
+            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#F5C518] text-sm font-black text-[#1A1400]"
+            aria-label="Profile"
           >
-            <span className="font-mono tabular-nums">
-              {(profile.displayName || "P").slice(0, 2).toUpperCase()}
-            </span>
+            {(profile.displayName || "P").slice(0, 1).toUpperCase()}
           </Link>
         </div>
       </div>

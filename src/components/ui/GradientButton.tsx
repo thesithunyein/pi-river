@@ -19,15 +19,14 @@ type LinkProps = BaseProps & {
 };
 
 const baseClassName =
-  "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-extrabold transition-transform duration-150 active:translate-y-px";
+  "inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl px-5 py-3 text-sm font-extrabold transition duration-150 active:translate-y-px disabled:pointer-events-none";
 
 const variantClassName = {
   primary:
-    "bg-mi-cta text-slate-950 shadow-mi-glow hover:brightness-105",
+    "bg-gradient-to-r from-[#F5C518] via-[#FF9B3D] to-[#E8791A] text-[#1A1400] shadow-[0_10px_28px_rgba(245,197,24,0.28)] hover:brightness-105",
   secondary:
-    "border border-river-line/20 bg-river-bg1/80 text-river-white shadow-mi-panel hover:border-river-violet/30 hover:bg-river-bg2/80",
-  ghost:
-    "text-river-grey hover:bg-river-bg1/70 hover:text-river-white",
+    "border border-white/12 bg-white/5 text-white hover:bg-white/10",
+  ghost: "text-[#9AA0B4] hover:bg-white/5 hover:text-white",
 };
 
 export function GradientButton({
@@ -39,7 +38,7 @@ export function GradientButton({
 }: ButtonProps | LinkProps) {
   const content = (
     <>
-      {icon ? <span className="-mt-px flex h-5 w-5 items-center justify-center">{icon}</span> : null}
+      {icon ? <span className="flex h-5 w-5 items-center justify-center">{icon}</span> : null}
       <span>{children}</span>
     </>
   );
@@ -55,7 +54,7 @@ export function GradientButton({
   }
 
   return (
-    <button type="button" className={classes} {...props}>
+    <button type="button" className={classes} {...(props as ButtonProps)}>
       {content}
     </button>
   );
