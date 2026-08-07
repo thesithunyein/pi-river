@@ -130,7 +130,7 @@ export default function OnchainTablePage() {
       handLive: row[15],
     };
     setTable(next);
-    setLog(`${STAGE_LABELS[next.stage] || "Table"} · pot ${formatEther(next.pot)} ETH`);
+    setLog(`${STAGE_LABELS[next.stage] || "Table"} | pot ${formatEther(next.pot)} ETH`);
 
     if (address && (address === next.player0 || address === next.player1) && next.handLive) {
       try {
@@ -369,9 +369,9 @@ export default function OnchainTablePage() {
                 {shortAddr(opponent?.addr || table?.player1)}
               </p>
               <p className="font-mono text-[10px] text-[#9dceb4]">
-                {opponent ? `${formatEther(opponent.stack)} ETH` : "—"}
-                {opponent?.bet && opponent.bet > 0n ? ` · bet ${formatEther(opponent.bet)}` : ""}
-                {opponent?.folded ? " · folded" : ""}
+                {opponent ? `${formatEther(opponent.stack)} ETH` : "-"}
+                {opponent?.bet && opponent.bet > 0n ? ` | bet ${formatEther(opponent.bet)}` : ""}
+                {opponent?.folded ? " | folded" : ""}
               </p>
             </div>
           </div>
@@ -418,9 +418,9 @@ export default function OnchainTablePage() {
             <div>
               <p className="font-mono text-[11px] font-bold text-white">{shortAddr(address)}</p>
               <p className="font-mono text-[10px] text-[#9dceb4]">
-                {me ? `${formatEther(me.stack)} ETH` : "—"}
-                {me?.bet && me.bet > 0n ? ` · bet ${formatEther(me.bet)}` : ""}
-                {myTurn ? " · your turn" : ""}
+                {me ? `${formatEther(me.stack)} ETH` : "-"}
+                {me?.bet && me.bet > 0n ? ` | bet ${formatEther(me.bet)}` : ""}
+                {myTurn ? " | your turn" : ""}
               </p>
             </div>
           </div>

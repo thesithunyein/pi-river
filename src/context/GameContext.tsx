@@ -7,6 +7,8 @@ export interface UserProfile {
   displayName: string;
   bio: string;
   avatarId: string;
+  /** Custom photo as data URL (wallet users). Google photo comes from OAuth. */
+  avatarUrl: string | null;
   country: string;
   favHand: string;
 }
@@ -129,6 +131,7 @@ const INITIAL_PROFILE: UserProfile = {
   displayName: "Player",
   bio: "Building reads one hand at a time.",
   avatarId: "club-runner",
+  avatarUrl: null,
   country: "Global",
   favHand: "A-K suited",
 };
@@ -179,7 +182,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         if (parsed.rewardTrackDay) setRewardTrackDay(parsed.rewardTrackDay);
         if (parsed.stats) setStats(parsed.stats);
         if (parsed.matchHistory) setMatchHistory(parsed.matchHistory);
-        if (parsed.profile) setProfile((prev) => ({ ...prev, ...parsed.profile }));
+        if (parsed.profile) {
+          setProfile((prev) => ({
+            ...prev,
+            ...parsed.profile,
+            avatarUrl: parsed.profile.avatarUrl ?? prev.avatarUrl ?? null,
+          }));
+        }
         if (parsed.xp !== undefined) setVipTier(getTierForXp(parsed.xp));
         if (parsed.soundEnabled !== undefined) {
           setSoundEnabledState(parsed.soundEnabled);

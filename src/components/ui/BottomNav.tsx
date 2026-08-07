@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CardsIcon, GiftIcon, PlayIcon, UserIcon } from "@/components/icons";
+import { GiftIcon, PlayIcon, ShopBagIcon, UserIcon } from "@/components/icons";
 import { cn } from "@/lib/cn";
 
 const items = [
   { href: "/", label: "Play", icon: PlayIcon },
-  { href: "/shop", label: "Shop", icon: CardsIcon },
+  { href: "/shop", label: "Shop", icon: ShopBagIcon },
   { href: "/rewards", label: "Rewards", icon: GiftIcon },
   { href: "/profile", label: "Profile", icon: UserIcon },
 ];

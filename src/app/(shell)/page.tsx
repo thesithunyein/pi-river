@@ -123,12 +123,8 @@ export default function LobbyPage() {
           }}
         />
         <div className="relative mx-auto flex max-w-lg flex-col items-center text-center">
-          <div className="mb-4 flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-[#F5C518] shadow-[0_12px_40px_rgba(245,197,24,0.35)]">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/brand/mi-mark.svg" alt="pi" className="h-16 w-16" />
-          </div>
           <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-[#9dceb4]">
-            pi River · Heads-up · Private hole cards
+            Heads-up private Hold&apos;em
           </p>
           <h1 className="font-display text-4xl font-black leading-[1.05] text-white sm:text-5xl">
             Sit down.
@@ -147,7 +143,7 @@ export default function LobbyPage() {
               onClick={createTable}
               disabled={isPending}
             >
-              {isPending ? "Confirm in wallet…" : "Create table · 0.001 ETH"}
+              {isPending ? "Confirm in wallet…" : "Create table (0.001 ETH)"}
             </GradientButton>
 
             <div className="flex gap-2">

@@ -76,7 +76,7 @@ export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProp
             <div>
               <p className="text-sm font-bold text-river-white">Network target</p>
               <p className="mt-1 text-xs leading-6 text-river-grey">
-                UI badge only for now: Inco Lightning · Base Sepolia. Wallet and contract actions are still
+                UI badge only for now: Inco Lightning on Base Sepolia. Wallet and contract actions are still
                 being wired.
               </p>
             </div>

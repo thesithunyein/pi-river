@@ -1,12 +1,11 @@
 "use client";
 
-import Image from "next/image";
 import { useState } from "react";
 import {
-  CardsIcon,
   CheckIcon,
   CoinIcon,
   DiamondIcon,
+  ShopBagIcon,
   SpadeIcon,
   TableIcon,
 } from "@/components/icons";
@@ -69,31 +68,22 @@ const tableFelts = [
 
 function CardBackArt({ mark }: { mark: string }) {
   return (
-    <div className="relative mx-auto aspect-[5/7] w-28 overflow-hidden rounded-[18px] border border-white/25 bg-black/20 shadow-lg">
-      <Image
-        src="/brand/card-back.svg"
-        alt=""
-        width={120}
-        height={168}
-        className="absolute inset-0 h-full w-full object-cover opacity-35"
-      />
+    <div className="relative mx-auto aspect-[5/7] w-28 overflow-hidden rounded-[18px] border border-white/25 bg-black/25 shadow-lg">
       <div
-        className="absolute inset-[6px] rounded-[12px] border border-white/20"
+        className="absolute inset-0 opacity-90"
         style={{
           backgroundImage:
-            "repeating-linear-gradient(45deg, rgba(255,255,255,0.08) 0 2px, transparent 2px 8px)",
+            "repeating-linear-gradient(45deg, rgba(255,255,255,0.07) 0 2px, transparent 2px 9px)",
         }}
       />
+      <div className="absolute inset-[7px] rounded-[12px] border border-white/18" />
       <div className="absolute inset-0 flex items-center justify-center">
         <div
-          className="flex h-12 w-12 items-center justify-center rounded-full border-2"
-          style={{ borderColor: mark, color: mark, background: "rgba(0,0,0,0.35)" }}
+          className="flex h-12 w-12 items-center justify-center rounded-full border-2 shadow-[0_8px_20px_rgba(0,0,0,0.35)]"
+          style={{ borderColor: mark, color: mark, background: "rgba(0,0,0,0.4)" }}
         >
           <SpadeIcon className="h-6 w-6" />
         </div>
-      </div>
-      <div className="absolute bottom-2 left-0 right-0 text-center text-[9px] font-black uppercase tracking-[0.2em] text-white/70">
-        pi
       </div>
     </div>
   );
@@ -102,13 +92,6 @@ function CardBackArt({ mark }: { mark: string }) {
 function FeltArt({ tone, chip }: { tone: string; chip: string }) {
   return (
     <div className={`relative h-16 w-24 overflow-hidden rounded-[18px] border border-white/15 bg-gradient-to-br ${tone}`}>
-      <Image
-        src="/brand/table-felt.svg"
-        alt=""
-        width={160}
-        height={96}
-        className="absolute inset-0 h-full w-full object-cover opacity-40 mix-blend-overlay"
-      />
       <div className="absolute inset-2 rounded-full border border-white/10" />
       <div
         className="absolute left-1/2 top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2"
@@ -181,7 +164,7 @@ export default function ShopPage() {
       <GlassCard className="space-y-5">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 text-[#F5C518]">
-            <CardsIcon className="h-5 w-5" />
+            <ShopBagIcon className="h-5 w-5" />
           </span>
           <div>
             <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#F5C518]">Deck</p>

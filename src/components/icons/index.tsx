@@ -189,9 +189,33 @@ export function LockIncoIcon(props: IconProps) {
 export function CardsIcon(props: IconProps) {
   return (
     <IconBase {...props}>
-      <rect x="6" y="5.5" width="10" height="14" rx="2" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M9.2 4.2h8.2A2 2 0 0 1 19.4 6.2v10.8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-      <path d="m10.2 11.2 1.8-2.2 1.8 2.2-1.8 2.2-1.8-2.2Z" fill="currentColor" />
+      <rect x="4.2" y="6.2" width="9.2" height="13" rx="1.8" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="1.5" transform="rotate(-12 8.8 12.7)" />
+      <rect x="9.2" y="4.8" width="9.2" height="13" rx="1.8" fill="currentColor" fillOpacity="0.35" stroke="currentColor" strokeWidth="1.5" transform="rotate(10 13.8 11.3)" />
+      <path d="M12.2 9.2 14 11.4 15.8 9.2 14 7l-1.8 2.2Z" fill="currentColor" />
+    </IconBase>
+  );
+}
+
+export function ShopBagIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path
+        d="M7.2 8.2h9.6l.8 11.2a1.8 1.8 0 0 1-1.8 1.9H8.2a1.8 1.8 0 0 1-1.8-1.9L7.2 8.2Z"
+        fill="currentColor"
+        fillOpacity="0.2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9 8.2V7a3 3 0 0 1 6 0v1.2"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <circle cx="10.2" cy="14" r="1.1" fill="currentColor" />
+      <circle cx="13.8" cy="14" r="1.1" fill="currentColor" />
+      <path d="M10.2 15.1v1.8M13.8 15.1v1.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </IconBase>
   );
 }

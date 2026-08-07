@@ -5,7 +5,7 @@ import { useAccount, useConnect } from "wagmi";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
 import Image from "next/image";
-import { LockIncoIcon, SpadeIcon, WalletIcon } from "@/components/icons";
+import { LockIncoIcon, WalletIcon } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
 
 type AuthGateContextValue = {
@@ -72,13 +72,17 @@ function EntryScreen({
       />
       <div className="relative w-full max-w-md space-y-5">
         <div className="flex flex-col items-center text-center">
-          <div className="mb-4 flex h-[76px] w-[76px] items-center justify-center rounded-[24px] bg-[#F5C518] shadow-[0_16px_40px_rgba(245,197,24,0.4)]">
-            <SpadeIcon className="h-11 w-11 text-[#1A1400]" />
-          </div>
-          <Image src="/brand/mi-logo.svg" alt="pi River" width={176} height={40} className="h-10 w-auto" priority />
-          <h1 className="mt-4 font-display text-3xl font-black text-white">Sit down to play</h1>
+          <Image
+            src="/brand/mi-logo.svg"
+            alt="pi River"
+            width={176}
+            height={40}
+            className="h-11 w-auto"
+            priority
+          />
+          <h1 className="mt-5 font-display text-3xl font-black text-white">Sit down to play</h1>
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#9AA0B4]">
-            Google or wallet unlocks the full app — Play, Shop, Rewards, and Profile stay locked until then.
+            Google or wallet unlocks the full app. Play, Shop, Rewards, and Profile stay locked until then.
           </p>
         </div>
 
@@ -118,7 +122,7 @@ function EntryScreen({
             <LockIncoIcon className="h-5 w-5" />
           </span>
           <p className="text-left text-xs leading-relaxed text-[#9AA0B4]">
-            Confidential heads-up Hold&apos;em on Inco Lightning · Base Sepolia. Hole cards stay private until showdown.
+            Confidential heads-up Hold&apos;em on Inco Lightning, Base Sepolia. Hole cards stay private until showdown.
           </p>
         </div>
       </div>

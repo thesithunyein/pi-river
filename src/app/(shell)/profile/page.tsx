@@ -14,20 +14,12 @@ import {
   WalletIcon,
 } from "@/components/icons";
 import { useAuthGate } from "@/components/AuthGate";
+import { PlayerAvatar, usePlayerAvatarSrc } from "@/components/PlayerAvatar";
 import { AVATAR_OPTIONS, useGame } from "@/context/GameContext";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useAccount, useDisconnect } from "wagmi";
-
-function getInitials(value: string) {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
 
 export default function ProfilePage() {
   const { googleUser, walletConnected, signOutGoogle } = useAuthGate();
@@ -48,10 +40,24 @@ export default function ProfilePage() {
   } = useGame();
 
   const [draft, setDraft] = useState(profile);
+  const liveAvatarSrc = usePlayerAvatarSrc();
 
   useEffect(() => {
     setDraft(profile);
   }, [profile]);
+
+  useEffect(() => {
+    if (!googleUser) return;
+    const meta = googleUser.user_metadata as Record<string, unknown> | undefined;
+    const googleName =
+      (typeof meta?.full_name === "string" && meta.full_name) ||
+      (typeof meta?.name === "string" && meta.name) ||
+      null;
+    if (googleName && (profile.displayName === "Player" || !profile.displayName)) {
+      updateProfile({ displayName: googleName });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleUser?.id]);
 
   const avatar = useMemo(
     () => AVATAR_OPTIONS.find((item) => item.id === profile.avatarId) ?? AVATAR_OPTIONS[0],
@@ -59,6 +65,30 @@ export default function ProfilePage() {
   );
 
   const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : null;
+
+  function onPickPhoto(file: File | null) {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setNotice("Choose an image file.");
+      window.setTimeout(() => setNotice(null), 1800);
+      return;
+    }
+    if (file.size > 1_200_000) {
+      setNotice("Keep photos under about 1MB.");
+      window.setTimeout(() => setNotice(null), 1800);
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = typeof reader.result === "string" ? reader.result : null;
+      if (!result) return;
+      updateProfile({ avatarUrl: result });
+      setDraft((current) => ({ ...current, avatarUrl: result }));
+      setNotice("Profile photo saved.");
+      window.setTimeout(() => setNotice(null), 1800);
+    };
+    reader.readAsDataURL(file);
+  }
 
   const statsItems = [
     { label: "Hands", value: stats.handsPlayed.toLocaleString(), icon: CardsIcon, tone: "text-[#F5C518]" },
@@ -102,10 +132,8 @@ export default function ProfilePage() {
       <GlassCard accent="purple" className="space-y-5">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            <div
-              className={`relative flex h-20 w-20 items-center justify-center rounded-[26px] bg-gradient-to-br ${avatar.bgGradient} text-2xl font-black text-white shadow-[0_12px_32px_rgba(0,0,0,0.35)]`}
-            >
-              {getInitials(profile.displayName)}
+            <div className="relative">
+              <PlayerAvatar className="rounded-[26px]" size={80} showRing />
               <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#161322] bg-[#F5C518] text-[#1A1400]">
                 <SpadeIcon className="h-4 w-4" />
               </span>
@@ -116,6 +144,13 @@ export default function ProfilePage() {
               </p>
               <h2 className="text-2xl font-black text-white">{profile.displayName}</h2>
               <p className="text-sm text-[#9AA0B4]">{profile.bio}</p>
+              <p className="text-[11px] font-semibold text-[#7d8398]">
+                {liveAvatarSrc
+                  ? googleUser && !profile.avatarUrl
+                    ? "Photo from Google"
+                    : "Custom profile photo"
+                  : `Style: ${avatar.name}`}
+              </p>
             </div>
           </div>
 
@@ -179,9 +214,45 @@ export default function ProfilePage() {
             </div>
           </div>
 
+          <div className="rounded-2xl border border-white/8 bg-[#12101c] p-4">
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
+              Profile photo
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-[#9AA0B4]">
+              {googleUser
+                ? "Google photo shows automatically. Upload a custom photo anytime to override it."
+                : "Upload a photo for your wallet profile. It stays on this device."}
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-white transition hover:bg-white/10">
+                Upload photo
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(event) => onPickPhoto(event.target.files?.[0] ?? null)}
+                />
+              </label>
+              {profile.avatarUrl ? (
+                <GradientButton
+                  variant="secondary"
+                  className="min-h-10 px-4 text-xs"
+                  onClick={() => {
+                    updateProfile({ avatarUrl: null });
+                    setDraft((current) => ({ ...current, avatarUrl: null }));
+                    setNotice(googleUser ? "Back to Google photo." : "Photo cleared.");
+                    window.setTimeout(() => setNotice(null), 1800);
+                  }}
+                >
+                  Clear custom photo
+                </GradientButton>
+              ) : null}
+            </div>
+          </div>
+
           <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
             {AVATAR_OPTIONS.map((option) => {
-              const active = option.id === draft.avatarId;
+              const active = option.id === draft.avatarId && !liveAvatarSrc;
               return (
                 <button
                   key={option.id}
@@ -191,7 +262,13 @@ export default function ProfilePage() {
                       ? "border-[#F5C518]/40 bg-[#F5C518]/10"
                       : "border-white/8 bg-[#12101c] hover:border-white/20"
                   }`}
-                  onClick={() => setDraft((current) => ({ ...current, avatarId: option.id }))}
+                  onClick={() =>
+                    setDraft((current) => ({
+                      ...current,
+                      avatarId: option.id,
+                      avatarUrl: null,
+                    }))
+                  }
                 >
                   <div
                     className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${option.bgGradient} text-xs font-black text-white`}

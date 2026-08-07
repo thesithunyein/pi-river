@@ -6,11 +6,12 @@ import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { baseSepolia } from "wagmi/chains";
 import { CoinIcon, WalletIcon } from "@/components/icons";
 import { useAuthGate } from "@/components/AuthGate";
+import { PlayerAvatar } from "@/components/PlayerAvatar";
 import { useGame } from "@/context/GameContext";
 import { GradientButton } from "@/components/ui/GradientButton";
 
 export function TopBar() {
-  const { chips, profile } = useGame();
+  const { chips } = useGame();
   const { googleUser } = useAuthGate();
   const { address, isConnected, chainId } = useAccount();
   const { connect, connectors, isPending } = useConnect();
@@ -25,7 +26,7 @@ export function TopBar() {
         <Link href="/" className="flex min-h-11 items-center gap-2.5">
           <Image
             src="/brand/mi-mark.svg"
-            alt="mi"
+            alt="pi"
             width={40}
             height={40}
             className="h-10 w-10 rounded-xl shadow-[0_0_0_1px_rgba(245,197,24,0.35)]"
@@ -88,10 +89,10 @@ export function TopBar() {
 
           <Link
             href="/profile"
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-white/10 bg-[#F5C518] text-sm font-black text-[#1A1400]"
+            className="overflow-hidden rounded-full border border-white/10"
             aria-label="Profile"
           >
-            {(profile.displayName || "P").slice(0, 1).toUpperCase()}
+            <PlayerAvatar className="rounded-full" size={40} />
           </Link>
         </div>
       </div>
