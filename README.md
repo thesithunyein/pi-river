@@ -1,11 +1,38 @@
-<div align="center">
+# RIVER - Onchain Poker
 
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
+The first poker room where the house cannot see your cards. Powered by Inco FHE.
 
-  <h1>Built with AI Studio</h2>
+## Quick Start
 
-  <p>The fastest path from prompt to production with Gemini.</p>
+1. Clone and install
+   ```
+   git clone https://github.com/thesithunyein/river-poker.git
+   cd river-poker
+   npm install
+   ```
 
-  <a href="https://aistudio.google.com/apps">Start building</a>
+2. Set up Supabase
+   - Create a project at supabase.com
+   - Enable Google OAuth provider
+   - Copy your URL and anon key
 
-</div>
+3. Configure environment
+   ```
+   cp .env.local.template .env.local
+   # Add your Supabase credentials
+   ```
+
+4. Run
+   ```
+   npm run dev
+   ```
+
+## Tech Stack
+- Next.js 15
+- Supabase Auth (Google)
+- Tailwind CSS
+- Inco FHE (encrypted hole cards)
+
+## Deploy
+
+Push to GitHub and connect to Vercel for automatic deployment.
