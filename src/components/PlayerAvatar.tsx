@@ -3,24 +3,18 @@
 import Image from "next/image";
 import { useMemo } from "react";
 import { useAuthGate } from "@/components/AuthGate";
+import { CuteAvatar } from "@/components/CuteAvatar";
 import { AVATAR_OPTIONS, useGame } from "@/context/GameContext";
 import { cn } from "@/lib/cn";
-
-function getInitials(value: string) {
-  return value
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("");
-}
 
 export function usePlayerAvatarSrc() {
   const { profile } = useGame();
   const { googleUser } = useAuthGate();
 
   return useMemo(() => {
-    // Prefer Google profile photo unless the player uploaded a custom photo
+    // Explicit cute-avatar pick always wins
+    if (profile.usePresetAvatar) return null;
+    // Prefer uploaded photo, then Google
     const meta = googleUser?.user_metadata as Record<string, unknown> | undefined;
     const google =
       (typeof meta?.avatar_url === "string" && meta.avatar_url) ||
@@ -30,7 +24,7 @@ export function usePlayerAvatarSrc() {
     if (google) return google;
     if (profile.avatarUrl) return profile.avatarUrl;
     return null;
-  }, [profile.avatarUrl, googleUser]);
+  }, [profile.avatarUrl, profile.usePresetAvatar, googleUser]);
 }
 
 export function PlayerAvatar({
@@ -45,7 +39,6 @@ export function PlayerAvatar({
   const { profile } = useGame();
   const src = usePlayerAvatarSrc();
   const avatar = AVATAR_OPTIONS.find((item) => item.id === profile.avatarId) ?? AVATAR_OPTIONS[0];
-  const initials = getInitials(profile.displayName || "P") || "P";
 
   if (src) {
     return (
@@ -67,17 +60,12 @@ export function PlayerAvatar({
   }
 
   return (
-    <div
-      className={cn(
-        `flex items-center justify-center bg-gradient-to-br ${avatar.bgGradient} font-black text-white`,
-        showRing ? "ring-2 ring-[#F5C518]/50" : "",
-        className
-      )}
-      style={{ width: size, height: size, fontSize: Math.max(11, size * 0.32) }}
-      aria-hidden
-    >
-      {initials}
-    </div>
+    <CuteAvatar
+      id={avatar.id}
+      size={size}
+      showRing={showRing}
+      className={className}
+    />
   );
 }
 

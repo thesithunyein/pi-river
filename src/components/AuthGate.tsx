@@ -130,7 +130,7 @@ function EntryScreen({
               type="button"
               onClick={onGoogle}
               disabled={googleLoading}
-              className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl bg-white px-4 text-sm font-black text-slate-900 transition hover:bg-slate-100 disabled:opacity-50"
+              className="relative z-10 flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-white px-4 text-sm font-black text-slate-900 transition hover:bg-slate-100 disabled:opacity-50"
             >
               <GoogleMark className="h-5 w-5" />
               {googleLoading ? "Opening Google…" : "Continue with Google"}
@@ -148,14 +148,14 @@ function EntryScreen({
               type="button"
               onClick={onWallet}
               disabled={walletLoading}
-              className="flex min-h-12 w-full items-center justify-center gap-3 rounded-2xl border border-white/12 bg-[#1f1a2e] px-4 text-sm font-black text-white transition hover:bg-[#2a2438] disabled:opacity-50"
+              className="relative z-10 flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl border border-white/12 bg-[#1f1a2e] px-4 text-sm font-black text-white transition hover:bg-[#2a2438] disabled:opacity-50"
             >
               <MetaMaskMark className="h-6 w-6 shrink-0" />
               {walletLoading ? "Connecting…" : "Continue with MetaMask"}
             </button>
 
             <p className="text-center text-[11px] leading-relaxed text-[#7d8398]">
-              Other browser wallets work too if MetaMask is not installed.
+              Phone tip: Google play needs no wallet. MetaMask opens in the MetaMask app.
             </p>
 
             {googleError ? (
@@ -190,7 +190,7 @@ function EntryScreen({
 
 export function AuthGate({ children }: { children: ReactNode }) {
   const { address, isConnected, status: accountStatus } = useAccount();
-  const { connect, connectors, isPending: walletLoading } = useConnect();
+  const { connectAsync, connectors, isPending: walletLoading } = useConnect();
   const { disconnect } = useDisconnect();
   const [ready, setReady] = useState(false);
   const [googleUser, setGoogleUser] = useState<User | null>(null);
@@ -260,13 +260,39 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   function startWallet() {
+    setGoogleError(null);
+    const hasInjected =
+      typeof window !== "undefined" &&
+      Boolean((window as Window & { ethereum?: unknown }).ethereum);
+    const mobile = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+    // Mobile Safari/Chrome have no injected MetaMask — open the dapp inside MetaMask
+    if (!hasInjected && mobile) {
+      const hostPath = `${window.location.host}${window.location.pathname}${window.location.search}`;
+      window.location.href = `https://metamask.app.link/dapp/${hostPath}`;
+      setGoogleError("Opening MetaMask… Or just Continue with Google — no wallet needed to play.");
+      return;
+    }
+
     const connector = connectors.find((c) => c.id === "injected") ?? connectors[0];
     if (!connector) {
-      setGoogleError("No browser wallet found. Install MetaMask, then refresh.");
+      setGoogleError(
+        mobile
+          ? "On phone, tap Continue with Google to play. Wallet is optional."
+          : "No browser wallet found. Install MetaMask, then refresh — or continue with Google."
+      );
       return;
     }
     resumeWalletLink();
-    connect({ connector });
+    try {
+      await connectAsync({ connector });
+    } catch {
+      setGoogleError(
+        mobile
+          ? "Wallet connect failed. Tap Continue with Google to play without MetaMask."
+          : "Could not connect wallet. Try MetaMask, or continue with Google."
+      );
+    }
   }
 
   async function signOutGoogleOnly() {
@@ -327,7 +353,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <AuthGateContext.Provider value={value}>
         <EntryScreen
           onGoogle={startGoogle}
-          onWallet={startWallet}
+          onWallet={() => void startWallet()}
           googleLoading={googleLoading}
           walletLoading={walletLoading}
           googleError={googleError}

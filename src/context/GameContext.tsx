@@ -9,6 +9,8 @@ export interface UserProfile {
   avatarId: string;
   /** Custom photo as data URL (wallet users). Google photo comes from OAuth. */
   avatarUrl: string | null;
+  /** When true, show the chosen cute avatar instead of Google/upload photo. */
+  usePresetAvatar: boolean;
   country: string;
   favHand: string;
 }
@@ -26,50 +28,50 @@ export const AVATAR_OPTIONS: AvatarOption[] = [
   {
     id: "club-runner",
     name: "Club Runner",
-    emoji: "CR",
-    bgGradient: "from-cyan-500 to-blue-700",
-    borderColor: "border-cyan-400",
-    description: "Fast entry grinder",
+    emoji: "🦊",
+    bgGradient: "from-cyan-400 to-orange-500",
+    borderColor: "border-cyan-300",
+    description: "Speedy fox who loves early pots",
   },
   {
     id: "gold-stack",
     name: "Gold Stack",
-    emoji: "GS",
-    bgGradient: "from-amber-400 to-yellow-600",
+    emoji: "🪙",
+    bgGradient: "from-amber-300 to-yellow-600",
     borderColor: "border-yellow-300",
-    description: "Plays for clean value",
+    description: "Chip-crowned value hunter",
   },
   {
     id: "night-bluff",
     name: "Night Bluff",
-    emoji: "NB",
-    bgGradient: "from-blue-600 to-indigo-900",
-    borderColor: "border-indigo-400",
-    description: "Late street pressure specialist",
+    emoji: "🥷",
+    bgGradient: "from-indigo-500 to-violet-900",
+    borderColor: "border-indigo-300",
+    description: "Hooded midnight bluffer",
   },
   {
     id: "felt-core",
     name: "Felt Core",
-    emoji: "FC",
-    bgGradient: "from-emerald-500 to-teal-800",
-    borderColor: "border-emerald-400",
-    description: "Balanced table control",
+    emoji: "🐼",
+    bgGradient: "from-emerald-400 to-teal-800",
+    borderColor: "border-emerald-300",
+    description: "Calm green-table panda",
   },
   {
     id: "violet-read",
     name: "Violet Read",
-    emoji: "VR",
-    bgGradient: "from-purple-600 to-violet-950",
-    borderColor: "border-purple-400",
-    description: "Patient read heavy player",
+    emoji: "🦉",
+    bgGradient: "from-purple-400 to-violet-900",
+    borderColor: "border-purple-300",
+    description: "Big-eyed read specialist",
   },
   {
     id: "river-ace",
     name: "River Ace",
-    emoji: "RA",
-    bgGradient: "from-rose-500 to-red-800",
-    borderColor: "border-rose-400",
-    description: "High pressure closer",
+    emoji: "🦈",
+    bgGradient: "from-rose-400 to-red-800",
+    borderColor: "border-rose-300",
+    description: "Ace-finishing river shark",
   },
 ];
 
@@ -140,6 +142,7 @@ const INITIAL_PROFILE: UserProfile = {
   bio: "Building reads one hand at a time.",
   avatarId: "club-runner",
   avatarUrl: null,
+  usePresetAvatar: false,
   country: "Global",
   favHand: "A-K suited",
 };
@@ -198,6 +201,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
             ...prev,
             ...parsed.profile,
             avatarUrl: parsed.profile.avatarUrl ?? prev.avatarUrl ?? null,
+            usePresetAvatar: Boolean(parsed.profile.usePresetAvatar),
           }));
         }
         if (parsed.xp !== undefined) setVipTier(getTierForXp(parsed.xp));

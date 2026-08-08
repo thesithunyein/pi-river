@@ -14,6 +14,7 @@ import {
   WalletIcon,
 } from "@/components/icons";
 import { useAuthGate } from "@/components/AuthGate";
+import { CuteAvatar } from "@/components/CuteAvatar";
 import { PlayerAvatar, usePlayerAvatarSrc } from "@/components/PlayerAvatar";
 import { AVATAR_OPTIONS, useGame } from "@/context/GameContext";
 import { GlassCard } from "@/components/ui/GlassCard";
@@ -94,8 +95,8 @@ export default function ProfilePage() {
     reader.onload = () => {
       const result = typeof reader.result === "string" ? reader.result : null;
       if (!result) return;
-      updateProfile({ avatarUrl: result });
-      setDraft((current) => ({ ...current, avatarUrl: result }));
+      updateProfile({ avatarUrl: result, usePresetAvatar: false });
+      setDraft((current) => ({ ...current, avatarUrl: result, usePresetAvatar: false }));
       setNotice("Profile photo saved.");
       window.setTimeout(() => setNotice(null), 1800);
     };
@@ -222,14 +223,18 @@ export default function ProfilePage() {
               </p>
             </div>
             {!isConnected ? (
-              <GradientButton variant="secondary" className="min-h-9 px-3 text-xs" onClick={() => linkWallet()}>
-                {rememberedWallet ? "Reconnect" : "Link"}
+              <GradientButton
+                variant="secondary"
+                className="relative z-10 min-h-10 touch-manipulation px-3 text-xs"
+                onClick={() => linkWallet()}
+              >
+                {rememberedWallet ? "Reconnect" : "Optional link"}
               </GradientButton>
             ) : null}
           </div>
         </div>
         <p className="text-xs leading-relaxed text-[#9AA0B4]">
-          Google and wallet belong to the same player profile. Link both so you can browse with Google and play tables with your wallet.
+          Google is enough to play — your silent seat wallet handles tables. Linking MetaMask is optional (useful on desktop).
         </p>
       </GlassCard>
 
@@ -251,8 +256,8 @@ export default function ProfilePage() {
             </p>
             <p className="mt-1 text-xs leading-relaxed text-[#9AA0B4]">
               {googleUser
-                ? "Google photo shows automatically. Upload a custom photo anytime to override it."
-                : "Upload a photo for your wallet profile. It stays on this device."}
+                ? "Google photo shows by default. Pick a cute avatar below, or upload your own."
+                : "Pick a cute avatar or upload a photo. It stays on this device."}
             </p>
             <div className="mt-3 flex flex-wrap items-center gap-2">
               <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-white transition hover:bg-white/10">
@@ -264,14 +269,36 @@ export default function ProfilePage() {
                   onChange={(event) => onPickPhoto(event.target.files?.[0] ?? null)}
                 />
               </label>
+              {googleUser ? (
+                <GradientButton
+                  variant="secondary"
+                  className="min-h-10 px-4 text-xs"
+                  onClick={() => {
+                    updateProfile({ avatarUrl: null, usePresetAvatar: false });
+                    setDraft((current) => ({
+                      ...current,
+                      avatarUrl: null,
+                      usePresetAvatar: false,
+                    }));
+                    setNotice("Using Google photo.");
+                    window.setTimeout(() => setNotice(null), 1800);
+                  }}
+                >
+                  Use Google photo
+                </GradientButton>
+              ) : null}
               {profile.avatarUrl ? (
                 <GradientButton
                   variant="secondary"
                   className="min-h-10 px-4 text-xs"
                   onClick={() => {
-                    updateProfile({ avatarUrl: null });
-                    setDraft((current) => ({ ...current, avatarUrl: null }));
-                    setNotice(googleUser ? "Back to Google photo." : "Photo cleared.");
+                    updateProfile({ avatarUrl: null, usePresetAvatar: true });
+                    setDraft((current) => ({
+                      ...current,
+                      avatarUrl: null,
+                      usePresetAvatar: true,
+                    }));
+                    setNotice("Back to cute avatar.");
                     window.setTimeout(() => setNotice(null), 1800);
                   }}
                 >
@@ -283,7 +310,7 @@ export default function ProfilePage() {
 
           <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
             {AVATAR_OPTIONS.map((option) => {
-              const active = option.id === draft.avatarId && !liveAvatarSrc;
+              const active = option.id === draft.avatarId && draft.usePresetAvatar;
               return (
                 <button
                   key={option.id}
@@ -298,15 +325,15 @@ export default function ProfilePage() {
                       ...current,
                       avatarId: option.id,
                       avatarUrl: null,
+                      usePresetAvatar: true,
                     }))
                   }
                 >
-                  <div
-                    className={`mb-2 flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br ${option.bgGradient} text-xs font-black text-white`}
-                  >
-                    {option.emoji}
+                  <div className="mb-2">
+                    <CuteAvatar id={option.id} size={44} className="rounded-xl" />
                   </div>
                   <p className="text-xs font-bold text-white">{option.name}</p>
+                  <p className="mt-0.5 text-[10px] leading-snug text-[#9AA0B4]">{option.description}</p>
                 </button>
               );
             })}

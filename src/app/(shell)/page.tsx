@@ -168,10 +168,22 @@ export default function LobbyPage() {
       setStatus("Game is warming up. Try again in a moment.");
       return;
     }
-    if (!silent && !isConnected) {
-      setStatus("Sign in with Google to play.");
+
+    // Google silent seat — never require MetaMask on mobile
+    if (googleUser) {
+      if (!play.ready) {
+        setStatus("Setting up your seat…");
+        return;
+      }
+      if (!silent) {
+        setStatus("Could not create your play seat. Refresh once, then tap Play.");
+        return;
+      }
+    } else if (!isConnected) {
+      setStatus("Sign in with Google to play — no MetaMask needed.");
       return;
     }
+
     if (!silent && !(await ensureBaseSepolia())) return;
 
     setBusy(true);
@@ -305,8 +317,17 @@ export default function LobbyPage() {
   }
 
   async function joinTable() {
-    if (!silent && !isConnected) {
-      setStatus("Sign in with Google to join.");
+    if (googleUser) {
+      if (!play.ready) {
+        setStatus("Setting up your seat…");
+        return;
+      }
+      if (!silent) {
+        setStatus("Could not create your play seat. Refresh once, then join.");
+        return;
+      }
+    } else if (!isConnected) {
+      setStatus("Sign in with Google to join — no MetaMask needed.");
       return;
     }
     if (!contractReady) {
@@ -420,13 +441,19 @@ export default function LobbyPage() {
               className="w-full min-h-14 text-base"
               icon={mode === "bot" ? <BoltIcon className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
               onClick={createAndMaybeInviteBot}
-              disabled={waiting || (!silent && !googleUser && !isConnected)}
+              disabled={
+                waiting ||
+                (Boolean(googleUser) && !play.ready) ||
+                (!silent && !googleUser && !isConnected)
+              }
             >
               {waiting
                 ? "Starting…"
-                : mode === "bot"
-                  ? "Play now"
-                  : "Create friend table"}
+                : googleUser && !play.ready
+                  ? "Preparing seat…"
+                  : mode === "bot"
+                    ? "Play now"
+                    : "Create friend table"}
             </GradientButton>
 
             {waiting && status ? (

@@ -25,6 +25,9 @@ const PLAY_NEED = 15n * 10n ** 12n + 80n * 10n ** 12n + 12n * 10n ** 12n; // ~0.
 
 type PlayWalletStore = Record<string, Hex>;
 
+/** In-memory fallback when Safari private mode blocks storage writes. */
+const memoryStore: PlayWalletStore = {};
+
 function rpcUrl() {
   return (
     process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC ||
@@ -32,20 +35,42 @@ function rpcUrl() {
   );
 }
 
+function pickStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  for (const candidate of [window.localStorage, window.sessionStorage]) {
+    try {
+      const k = "__pi_river_storage_probe__";
+      candidate.setItem(k, "1");
+      candidate.removeItem(k);
+      return candidate;
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
 function readStore(): PlayWalletStore {
-  if (typeof window === "undefined") return {};
+  const storage = pickStorage();
+  if (!storage) return { ...memoryStore };
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as PlayWalletStore;
+    const raw = storage.getItem(STORAGE_KEY);
+    if (!raw) return { ...memoryStore };
+    return { ...memoryStore, ...(JSON.parse(raw) as PlayWalletStore) };
   } catch {
-    return {};
+    return { ...memoryStore };
   }
 }
 
 function writeStore(store: PlayWalletStore) {
-  if (typeof window === "undefined") return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(store));
+  Object.assign(memoryStore, store);
+  const storage = pickStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(STORAGE_KEY, JSON.stringify(store));
+  } catch {
+    // Memory store still keeps the key for this session (mobile private browsing)
+  }
 }
 
 /** Play wallet bound to Google. Key stays in the browser. */
