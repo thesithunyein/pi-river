@@ -724,18 +724,59 @@ export default function OnchainTablePage() {
   }
 
   async function startHand() {
-    const hash = await writeFn({
-      address: RIVER_HOLDEM_ADDRESS,
-      abi: riverHoldemAbi,
-      functionName: "startNextHand",
-      args: [tableId],
-      value: 0n,
-    });
-    await waitTx(hash);
-    awardedHand.current = false;
-    setRevealOpen(false);
+    sound.playClick();
+    setActing(true);
+    setBanner(null);
     setLog("Dealing private cards…");
-    await refresh();
+    try {
+      // Bot path: house deals (funds shuffle fee + starts hand)
+      if (vsBot) {
+        await fundTableShuffleFee();
+        const res = await fetch("/api/bot/deal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tableId: tableId.toString() }),
+        });
+        const data = (await res.json()) as { error?: string; skipped?: boolean };
+        if (!res.ok) {
+          setLog(data.error || "Could not deal. Tap Deal next hand.");
+          setBanner(data.error || "Could not deal. Tap again.");
+          return;
+        }
+        if (!data.skipped) sound.playCardSlide();
+        awardedHand.current = false;
+        setRevealOpen(false);
+        setLog("Cards are flying. Private holes locked.");
+        await refresh();
+        return;
+      }
+
+      await fundTableShuffleFee();
+      const hash = await writeFn({
+        address: RIVER_HOLDEM_ADDRESS,
+        abi: riverHoldemAbi,
+        functionName: "startNextHand",
+        args: [tableId],
+        value: 0n,
+      });
+      await waitTx(hash);
+      awardedHand.current = false;
+      setRevealOpen(false);
+      sound.playCardSlide();
+      setLog("Dealing private cards…");
+      await refresh();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Could not deal.";
+      const friendly = /fund shuffle fee/i.test(msg)
+        ? "Table needs a quick top-up. Tap Deal next hand again."
+        : msg.length > 120
+          ? "Could not deal. Tap Deal next hand again."
+          : msg;
+      setLog(friendly);
+      setBanner(friendly);
+    } finally {
+      setActing(false);
+    }
   }
 
   async function runShowdown() {
@@ -1146,71 +1187,84 @@ export default function OnchainTablePage() {
       <p className="px-1 text-center text-xs font-semibold text-[#9AA0B4]">{log}</p>
 
       {!waitingForOpponent ? (
-        <div className="sticky bottom-[5.5rem] z-30 space-y-2 rounded-[24px] border border-white/10 bg-[#12101c]/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:bottom-4">
+        <div className="sticky bottom-[5.5rem] z-50 space-y-2 rounded-[24px] border border-white/10 bg-[#12101c]/95 p-3 shadow-[0_18px_50px_rgba(0,0,0,0.45)] backdrop-blur-xl sm:bottom-24">
           {bothSeated && table && !table.handLive ? (
             <GradientButton
-              className="w-full min-h-12"
+              className="relative z-10 w-full min-h-12"
               icon={<BoltIcon className="h-5 w-5" />}
-              disabled={isPending}
+              disabled={isPending || acting}
               onClick={startHand}
             >
-              Deal next hand
+              {acting ? "Dealing…" : "Deal next hand"}
             </GradientButton>
           ) : null}
 
-          <div className="grid grid-cols-3 gap-2">
-            <GradientButton
-              variant="secondary"
-              className="min-h-12"
-              disabled={!myTurn || isPending || acting}
-              onClick={() => act("fold")}
-            >
-              Fold
-            </GradientButton>
-            <GradientButton
-              className="min-h-12"
-              disabled={!myTurn || isPending || acting}
-              onClick={() => act("checkCall")}
-            >
-              {toCall > 0n ? "Call" : "Check"}
-            </GradientButton>
-            <GradientButton
-              variant="secondary"
-              className="min-h-12"
-              disabled={!myTurn || isPending || acting}
-              onClick={raise}
-            >
-              Raise
-            </GradientButton>
-          </div>
+          {/* Hide fold/check/raise between hands so Deal stays the only target */}
+          {table?.handLive || table?.stage === 5 ? (
+            <>
+              {table.stage !== 5 ? (
+                <>
+                  <div className="grid grid-cols-3 gap-2">
+                    <GradientButton
+                      variant="secondary"
+                      className="min-h-12"
+                      disabled={!myTurn || isPending || acting}
+                      onClick={() => act("fold")}
+                    >
+                      Fold
+                    </GradientButton>
+                    <GradientButton
+                      className="min-h-12"
+                      disabled={!myTurn || isPending || acting}
+                      onClick={() => act("checkCall")}
+                    >
+                      {toCall > 0n ? "Call" : "Check"}
+                    </GradientButton>
+                    <GradientButton
+                      variant="secondary"
+                      className="min-h-12"
+                      disabled={!myTurn || isPending || acting}
+                      onClick={raise}
+                    >
+                      Raise
+                    </GradientButton>
+                  </div>
 
-          <div className="flex gap-2">
-            <input
-              value={raiseToEth}
-              onChange={(e) => setRaiseToEth(e.target.value)}
-              className="min-h-11 flex-1 rounded-2xl border border-white/10 bg-black/30 px-3 font-mono text-sm font-bold text-white outline-none focus:border-[#F5C518]/40"
-              aria-label="Raise to amount"
-              placeholder="0.000015"
-            />
-            <span className="flex min-h-11 items-center px-2 text-xs font-bold text-[#9AA0B4]">
-              Raise to
-            </span>
-          </div>
+                  <div className="flex gap-2">
+                    <input
+                      value={raiseToEth}
+                      onChange={(e) => setRaiseToEth(e.target.value)}
+                      className="min-h-11 flex-1 rounded-2xl border border-white/10 bg-black/30 px-3 font-mono text-sm font-bold text-white outline-none focus:border-[#F5C518]/40"
+                      aria-label="Raise to amount"
+                      placeholder="0.000015"
+                    />
+                    <span className="flex min-h-11 items-center px-2 text-xs font-bold text-[#9AA0B4]">
+                      Raise to
+                    </span>
+                  </div>
+                </>
+              ) : null}
 
-          {table?.stage === 5 ? (
-            <div className="grid grid-cols-2 gap-2">
-              <GradientButton disabled={isPending} onClick={runShowdown} icon={<CardsIcon className="h-4 w-4" />}>
-                {vsBot ? "Showdown" : "Submit cards"}
-              </GradientButton>
-              <GradientButton disabled={isPending} variant="secondary" onClick={finalize}>
-                Finalize
-              </GradientButton>
-            </div>
-          ) : null}
+              {table.stage === 5 ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <GradientButton disabled={isPending || acting} onClick={runShowdown} icon={<CardsIcon className="h-4 w-4" />}>
+                    {vsBot ? "Showdown" : "Submit cards"}
+                  </GradientButton>
+                  <GradientButton disabled={isPending || acting} variant="secondary" onClick={finalize}>
+                    Finalize
+                  </GradientButton>
+                </div>
+              ) : null}
 
-          {vsBot ? (
+              {vsBot ? (
+                <p className="text-center text-[10px] font-semibold text-[#7d8398]">
+                  Your cards stay private until showdown. Bot moves happen automatically.
+                </p>
+              ) : null}
+            </>
+          ) : bothSeated ? (
             <p className="text-center text-[10px] font-semibold text-[#7d8398]">
-              Your cards stay private until showdown. Bot moves happen automatically.
+              Hand settled. Tap Deal next hand when you are ready.
             </p>
           ) : null}
         </div>
