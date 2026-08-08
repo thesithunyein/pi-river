@@ -259,7 +259,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
   }
 
-  function startWallet() {
+  async function startWallet() {
     setGoogleError(null);
     const hasInjected =
       typeof window !== "undefined" &&
