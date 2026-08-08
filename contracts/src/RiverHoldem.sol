@@ -42,9 +42,11 @@ contract RiverHoldem is ConfidentialDeck {
     }
 
     uint256 public nextTableId = 1;
-    uint256 public constant MIN_BUY_IN = 0.001 ether;
-    uint256 public constant SB = 0.0001 ether;
-    uint256 public constant BB = 0.0002 ether;
+    // ~20 BB stacks so heads-up can play preflop → flop → turn → river
+    // Tiny buy-in keeps the house faucet able to drip + seat the bot on testnet
+    uint256 public constant MIN_BUY_IN = 0.000015 ether;
+    uint256 public constant SB = 0.000000375 ether;
+    uint256 public constant BB = 0.00000075 ether;
 
     mapping(uint256 => Table) public tables;
     mapping(uint256 => euint256[2]) internal hole0;

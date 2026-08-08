@@ -18,7 +18,7 @@ const displayFont = Nunito({
 export const metadata: Metadata = {
   title: "pi River",
   description:
-    "Heads-up confidential Texas Hold'em on Inco Lightning. Hole cards stay private until showdown. Live on Base Sepolia at pi.sithunyein.com.",
+    "Private heads-up Texas Hold'em. Instant play, sealed cards, jackpot tickets.",
   metadataBase: new URL("https://pi.sithunyein.com"),
   icons: { icon: "/brand/mi-mark.svg" },
 };

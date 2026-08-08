@@ -22,7 +22,7 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { useAccount, useDisconnect } from "wagmi";
 
 export default function ProfilePage() {
-  const { googleUser, walletConnected, linkGoogle, linkWallet, logoutAll } = useAuthGate();
+  const { googleUser, walletConnected, linkGoogle, linkWallet, logoutAll, rememberedWallet } = useAuthGate();
   const { address, isConnected } = useAccount();
   const { disconnect } = useDisconnect();
   const [notice, setNotice] = useState<string | null>(null);
@@ -53,8 +53,18 @@ export default function ProfilePage() {
       (typeof meta?.full_name === "string" && meta.full_name) ||
       (typeof meta?.name === "string" && meta.name) ||
       null;
+    const googlePic =
+      (typeof meta?.avatar_url === "string" && meta.avatar_url) ||
+      (typeof meta?.picture === "string" && meta.picture) ||
+      null;
+    const patch: Partial<typeof profile> = {};
     if (googleName && (profile.displayName === "Player" || !profile.displayName)) {
-      updateProfile({ displayName: googleName });
+      patch.displayName = googleName;
+    }
+    // Seed name from Google; photo is read live from OAuth metadata in PlayerAvatar
+    if (Object.keys(patch).length) updateProfile(patch);
+    if (googlePic) {
+      // no-op store — avatar comes from Google metadata; ensure we don't block it with emoji avatar
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleUser?.id]);
@@ -64,7 +74,9 @@ export default function ProfilePage() {
     [profile.avatarId]
   );
 
-  const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : null;
+  const short = (address ?? rememberedWallet)
+    ? `${(address ?? rememberedWallet)!.slice(0, 6)}…${(address ?? rememberedWallet)!.slice(-4)}`
+    : null;
 
   function onPickPhoto(file: File | null) {
     if (!file) return;
@@ -200,12 +212,18 @@ export default function ProfilePage() {
             <div className="min-w-0 flex-1">
               <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">Wallet</p>
               <p className="truncate font-mono text-sm font-bold text-white">
-                {isConnected && short ? short : walletConnected ? "Connected" : "Not linked yet"}
+                {isConnected && short
+                  ? short
+                  : rememberedWallet && short
+                    ? `${short} (saved)`
+                    : walletConnected
+                      ? "Connected"
+                      : "Not linked yet"}
               </p>
             </div>
             {!isConnected ? (
               <GradientButton variant="secondary" className="min-h-9 px-3 text-xs" onClick={() => linkWallet()}>
-                Link
+                {rememberedWallet ? "Reconnect" : "Link"}
               </GradientButton>
             ) : null}
           </div>

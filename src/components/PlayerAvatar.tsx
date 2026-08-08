@@ -20,13 +20,16 @@ export function usePlayerAvatarSrc() {
   const { googleUser } = useAuthGate();
 
   return useMemo(() => {
-    if (profile.avatarUrl) return profile.avatarUrl;
+    // Prefer Google profile photo unless the player uploaded a custom photo
     const meta = googleUser?.user_metadata as Record<string, unknown> | undefined;
     const google =
       (typeof meta?.avatar_url === "string" && meta.avatar_url) ||
       (typeof meta?.picture === "string" && meta.picture) ||
       null;
-    return google;
+    if (profile.avatarUrl?.startsWith("data:")) return profile.avatarUrl;
+    if (google) return google;
+    if (profile.avatarUrl) return profile.avatarUrl;
+    return null;
   }, [profile.avatarUrl, googleUser]);
 }
 

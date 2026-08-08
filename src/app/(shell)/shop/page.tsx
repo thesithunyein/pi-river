@@ -125,9 +125,9 @@ export default function ShopPage() {
   return (
     <div className="space-y-6">
       <SectionHeader
-        eyebrow="Locker"
-        title="Style your table"
-        description="Spend chips on card backs and felt. Cosmetics only."
+        eyebrow="Style up"
+        title="Shop"
+        description="Spend fun chips on card backs and table looks. Equip what you like, then hit Play."
       />
 
       {notice ? (
@@ -136,29 +136,28 @@ export default function ShopPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <GlassCard accent="gold" className="space-y-1">
-          <div className="flex items-center gap-3">
+      <div className="relative overflow-hidden rounded-[28px] border border-[#F5C518]/20 bg-gradient-to-br from-[#2a2210] via-[#161322] to-[#0f0d18] p-5 shadow-[0_18px_50px_rgba(0,0,0,0.35)]">
+        <div className="pointer-events-none absolute -right-8 -top-10 h-36 w-36 rounded-full bg-[#F5C518]/15 blur-3xl" />
+        <div className="relative grid gap-3 sm:grid-cols-2">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5C518]/15 text-[#F5C518]">
               <CoinIcon className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9AA0B4]">Chips</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9AA0B4]">Your chips</p>
               <p className="font-mono text-2xl font-black tabular-nums text-white">{chips.toLocaleString()}</p>
             </div>
           </div>
-        </GlassCard>
-        <GlassCard accent="purple" className="space-y-1">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
             <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#7B5CFF]/15 text-[#B9A8FF]">
               <DiamondIcon className="h-6 w-6" />
             </span>
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9AA0B4]">XP</p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9AA0B4]">XP level fuel</p>
               <p className="font-mono text-2xl font-black tabular-nums text-white">{xp.toLocaleString()}</p>
             </div>
           </div>
-        </GlassCard>
+        </div>
       </div>
 
       <GlassCard className="space-y-5">
@@ -180,7 +179,7 @@ export default function ShopPage() {
             return (
               <div
                 key={item.id}
-                className="rounded-[26px] border border-white/8 bg-[#12101c] p-4"
+                className="soft-card-hover rounded-[26px] border border-white/8 bg-[#12101c] p-4 shadow-[0_12px_40px_rgba(0,0,0,0.25)]"
               >
                 <div className={`rounded-[22px] bg-gradient-to-br ${item.accent} p-4`}>
                   <CardBackArt mark={item.mark} />

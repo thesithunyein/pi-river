@@ -1,6 +1,14 @@
 export const RIVER_HOLDEM_ADDRESS = (process.env.NEXT_PUBLIC_RIVER_HOLDEM_ADDRESS ||
   "") as `0x${string}`;
 
+/** Prior deploys that may still hold player/bot stacks. */
+export const LEGACY_RIVER_HOLDEM_ADDRESSES = [
+  "0x5069540F171a11B44B0067979a96b64BcB05E175",
+  "0x26f67a715201332c471cf5EdE68dB3d300549080",
+  "0xAE870b501E6265ED29b17259549C3CCca9017803",
+  "0xE33388db0C0e029C0db90f459EDc33FA1366d2FF",
+] as const satisfies readonly `0x${string}`[];
+
 export const riverHoldemAbi = [
   {
     type: "function",
@@ -134,6 +142,13 @@ export const riverHoldemAbi = [
   {
     type: "function",
     name: "MIN_BUY_IN",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "nextTableId",
     stateMutability: "view",
     inputs: [],
     outputs: [{ type: "uint256" }],

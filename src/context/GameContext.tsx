@@ -104,6 +104,10 @@ interface GameContextType {
   soundEnabled: boolean;
   profile: UserProfile;
   chainId: number;
+  /** Unclaimed Megapot ticket credits earned from sealed river play */
+  megapotCredits: number;
+  ticketsMinted: number;
+  sessionStake: number;
   updateProfile: (newProfile: Partial<UserProfile>) => void;
   setSoundEnabled: (enabled: boolean) => void;
   addChips: (amount: number) => void;
@@ -114,6 +118,10 @@ interface GameContextType {
   buyTableFelt: (id: string, priceChips: number) => boolean;
   claimDailyBonus: () => boolean;
   recordHandResult: (win: boolean, netChips: number, opponentName: string, handName: string) => void;
+  startMegapotSession: (mode: "bot" | "friend") => number;
+  awardMegapotWin: (opts?: { showdown?: boolean }) => number;
+  consumeMegapotCredit: () => boolean;
+  markTicketMinted: () => void;
   resetProgress: () => void;
 }
 
@@ -163,6 +171,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [soundEnabled, setSoundEnabledState] = useState<boolean>(true);
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [chainId] = useState<number>(84532);
+  const [megapotCredits, setMegapotCredits] = useState(0);
+  const [ticketsMinted, setTicketsMinted] = useState(0);
+  const [sessionStake, setSessionStake] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
 
   // Load from localStorage on mount
@@ -194,6 +205,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
           setSoundEnabledState(parsed.soundEnabled);
           sound.enabled = parsed.soundEnabled;
         }
+        if (typeof parsed.megapotCredits === "number") setMegapotCredits(parsed.megapotCredits);
+        if (typeof parsed.ticketsMinted === "number") setTicketsMinted(parsed.ticketsMinted);
       }
     } catch {
       // Ignore fallback
@@ -220,12 +233,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         matchHistory,
         soundEnabled,
         profile,
+        megapotCredits,
+        ticketsMinted,
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
     } catch {
       // Ignore
     }
-  }, [chips, xp, vipTier, equippedCardBack, equippedTableFelt, ownedCardBacks, ownedTableFelts, lastDailyBonusTime, rewardTrackDay, stats, matchHistory, soundEnabled, profile, isLoaded]);
+  }, [chips, xp, vipTier, equippedCardBack, equippedTableFelt, ownedCardBacks, ownedTableFelts, lastDailyBonusTime, rewardTrackDay, stats, matchHistory, soundEnabled, profile, megapotCredits, ticketsMinted, isLoaded]);
 
   const updateProfile = (newProfile: Partial<UserProfile>) => {
     setProfile((prev) => ({ ...prev, ...newProfile }));
@@ -311,8 +326,33 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setRewardTrackDay((prev) => (prev >= 16 ? 1 : prev + 1));
     addChips(100000);
     addXp(1000);
+    setMegapotCredits((c) => c + 1);
     sound.playWin();
     return true;
+  };
+
+  const startMegapotSession = (mode: "bot" | "friend") => {
+    const stake = mode === "friend" ? 2 : 1;
+    setSessionStake(stake);
+    return stake;
+  };
+
+  const awardMegapotWin = (opts?: { showdown?: boolean }) => {
+    const bonus = opts?.showdown ? 1 : 0;
+    const gained = sessionStake + bonus;
+    setMegapotCredits((c) => c + gained);
+    sound.playWin();
+    return gained;
+  };
+
+  const consumeMegapotCredit = () => {
+    if (megapotCredits <= 0) return false;
+    setMegapotCredits((c) => Math.max(0, c - 1));
+    return true;
+  };
+
+  const markTicketMinted = () => {
+    setTicketsMinted((n) => n + 1);
   };
 
   const recordHandResult = (
@@ -370,6 +410,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setStats(INITIAL_STATS);
     setMatchHistory(INITIAL_MATCHES);
     setProfile(INITIAL_PROFILE);
+    setMegapotCredits(0);
+    setTicketsMinted(0);
+    setSessionStake(1);
     localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -390,6 +433,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         soundEnabled,
         profile,
         chainId,
+        megapotCredits,
+        ticketsMinted,
+        sessionStake,
         updateProfile,
         setSoundEnabled,
         addChips,
@@ -400,6 +446,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         buyTableFelt,
         claimDailyBonus,
         recordHandResult,
+        startMegapotSession,
+        awardMegapotWin,
+        consumeMegapotCredit,
+        markTicketMinted,
         resetProgress,
       }}
     >

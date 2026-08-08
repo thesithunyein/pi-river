@@ -29,8 +29,9 @@ function IconBase({
 export function PlayIcon(props: IconProps) {
   return (
     <IconBase {...props}>
+      <circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity="0.16" />
       <path
-        d="M8.5 5.8c0-.9 1-1.5 1.8-1L19 11.2c.7.4.7 1.4 0 1.8L10.3 19.4c-.8.5-1.8-.1-1.8-1V5.8Z"
+        d="M10 7.6c0-.85.95-1.35 1.7-.9l7.2 4.4c.7.42.7 1.38 0 1.8l-7.2 4.4c-.75.45-1.7-.05-1.7-.9V7.6Z"
         fill="currentColor"
       />
     </IconBase>
@@ -98,11 +99,12 @@ export function ShirtIcon(props: IconProps) {
 export function UserIcon(props: IconProps) {
   return (
     <IconBase {...props}>
-      <circle cx="12" cy="8" r="3.4" fill="currentColor" />
+      <circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity="0.14" />
+      <circle cx="12" cy="9" r="3.2" fill="currentColor" />
       <path
-        d="M5.2 18.8c.8-3.2 3.2-5 6.8-5s6 1.8 6.8 5"
+        d="M6.2 18.2c1-3 3.1-4.6 5.8-4.6s4.8 1.6 5.8 4.6"
         stroke="currentColor"
-        strokeWidth="1.8"
+        strokeWidth="1.7"
         strokeLinecap="round"
       />
     </IconBase>
@@ -126,13 +128,29 @@ export function SettingsIcon(props: IconProps) {
 export function GiftIcon(props: IconProps) {
   return (
     <IconBase {...props}>
-      <rect x="4.5" y="9" width="15" height="10.5" rx="2" fill="currentColor" fillOpacity="0.2" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="3.5" y="6.5" width="17" height="3.2" rx="1.2" fill="currentColor" />
-      <path d="M12 6.5v13" stroke="currentColor" strokeWidth="1.6" />
       <path
-        d="M12 6.5c-1.2-2.2-3.6-2.4-4.4-1.2C6.6 6.5 7.4 8.2 9 8.8 10.2 9.2 11.3 8.2 12 6.5ZM12 6.5c1.2-2.2 3.6-2.4 4.4-1.2.9 1.2.1 2.9-1.5 3.5-1.2.4-2.3-.6-2.9-2.3Z"
+        d="M8.2 10.2h7.6l.7 8.4a1.6 1.6 0 0 1-1.6 1.7H9.1a1.6 1.6 0 0 1-1.6-1.7l.7-8.4Z"
+        fill="currentColor"
+        fillOpacity="0.22"
+        stroke="currentColor"
+        strokeWidth="1.55"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M6.4 8.2h11.2a1.2 1.2 0 0 1 1.2 1.2v.4H5.2v-.4A1.2 1.2 0 0 1 6.4 8.2Z"
         fill="currentColor"
       />
+      <path d="M12 8.2v12.1" stroke="currentColor" strokeWidth="1.55" />
+      <path
+        d="M12 8.2C10.6 5.6 8 5.3 7.2 6.7 6.3 8.1 7.4 9.8 9.2 10.3c1.3.4 2.4-.7 2.8-2.1Z"
+        fill="currentColor"
+      />
+      <path
+        d="M12 8.2c1.4-2.6 4-2.9 4.8-1.5.9 1.4-.2 3.1-2 3.6-1.3.4-2.4-.7-2.8-2.1Z"
+        fill="currentColor"
+      />
+      <circle cx="9.6" cy="14.2" r="0.9" fill="currentColor" fillOpacity="0.55" />
+      <circle cx="14.4" cy="16" r="0.85" fill="currentColor" fillOpacity="0.55" />
     </IconBase>
   );
 }
@@ -200,22 +218,27 @@ export function ShopBagIcon(props: IconProps) {
   return (
     <IconBase {...props}>
       <path
-        d="M7.2 8.2h9.6l.8 11.2a1.8 1.8 0 0 1-1.8 1.9H8.2a1.8 1.8 0 0 1-1.8-1.9L7.2 8.2Z"
+        d="M6.8 9h10.4l.9 10.6a1.7 1.7 0 0 1-1.7 1.9H7.6a1.7 1.7 0 0 1-1.7-1.9L6.8 9Z"
         fill="currentColor"
-        fillOpacity="0.2"
+        fillOpacity="0.22"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.55"
         strokeLinejoin="round"
       />
       <path
-        d="M9 8.2V7a3 3 0 0 1 6 0v1.2"
+        d="M8.6 9V7.2a3.4 3.4 0 0 1 6.8 0V9"
         stroke="currentColor"
-        strokeWidth="1.6"
+        strokeWidth="1.55"
         strokeLinecap="round"
       />
-      <circle cx="10.2" cy="14" r="1.1" fill="currentColor" />
-      <circle cx="13.8" cy="14" r="1.1" fill="currentColor" />
-      <path d="M10.2 15.1v1.8M13.8 15.1v1.8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+      <path
+        d="M9.4 13.2h5.2M9.4 16.2h5.2"
+        stroke="currentColor"
+        strokeWidth="1.45"
+        strokeLinecap="round"
+      />
+      <circle cx="10.4" cy="13.2" r="1" fill="currentColor" />
+      <circle cx="13.6" cy="16.2" r="1" fill="currentColor" />
     </IconBase>
   );
 }
@@ -248,5 +271,55 @@ export function TableIcon(props: IconProps) {
       <ellipse cx="12" cy="12" rx="5.5" ry="3.2" stroke="currentColor" strokeWidth="1.4" />
       <circle cx="12" cy="12" r="1.2" fill="currentColor" />
     </IconBase>
+  );
+}
+
+export function ZoomInIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m16.2 16.2 4.3 4.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M11 8.2v5.6M8.2 11h5.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </IconBase>
+  );
+}
+
+export function ZoomOutIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8" />
+      <path d="m16.2 16.2 4.3 4.3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <path d="M8.2 11h5.6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </IconBase>
+  );
+}
+
+/** Official Google “G” (Google Inc. asset via Firebase Auth branding). */
+export function GoogleMark({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/google-g.svg"
+      alt=""
+      width={20}
+      height={20}
+      className={className}
+      draggable={false}
+    />
+  );
+}
+
+/** Official MetaMask fox (MetaMask brand mark). */
+export function MetaMaskMark({ className = "h-5 w-5" }: { className?: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/metamask-fox.svg"
+      alt=""
+      width={20}
+      height={20}
+      className={className}
+      draggable={false}
+    />
   );
 }
