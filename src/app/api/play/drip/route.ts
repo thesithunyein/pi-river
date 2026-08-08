@@ -6,8 +6,10 @@ import { botReclaimFunds } from "@/lib/bot/reclaim";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const TARGET = parseEther("0.00012"); // buy-in + shuffle fee top-up + gas
-const MIN_SEND = parseEther("0.00002");
+/** Enough for one createTable + gas. Shuffle fee is topped up separately when possible. */
+const DEFAULT_TARGET = parseEther("0.000028");
+const MIN_PLAY = parseEther("0.000021");
+const MIN_SEND = parseEther("0.00001");
 const recent = new Map<string, number>();
 
 function normalizeAddress(raw: unknown): Address | null {
@@ -18,20 +20,34 @@ function normalizeAddress(raw: unknown): Address | null {
 /** Top up a Google play wallet so Quick Play needs no MetaMask / bridge. */
 export async function POST(req: Request) {
   try {
-    const body = (await req.json()) as { address?: string; googleUserId?: string };
+    const body = (await req.json()) as {
+      address?: string;
+      googleUserId?: string;
+      targetEth?: string;
+    };
     const to = normalizeAddress(body.address);
     if (!to) {
       return NextResponse.json({ error: "Valid play wallet address required." }, { status: 400 });
     }
 
+    let target = DEFAULT_TARGET;
+    if (body.targetEth) {
+      try {
+        const parsed = parseEther(body.targetEth);
+        if (parsed >= MIN_PLAY) target = parsed;
+      } catch {
+        // keep default
+      }
+    }
+
     const key = `${(body.googleUserId || "").slice(0, 64)}:${to.toLowerCase()}`;
     const last = recent.get(key) || 0;
-    if (Date.now() - last < 20_000) {
+    if (Date.now() - last < 12_000) {
       const client = getBotPublicClient();
       const bal = await client.getBalance({ address: to });
       return NextResponse.json({
         ok: true,
-        funded: bal >= TARGET,
+        funded: bal >= MIN_PLAY,
         balanceEth: formatEther(bal),
         drippedEth: "0",
         throttled: true,
@@ -47,13 +63,13 @@ export async function POST(req: Request) {
 
     // Free stuck bot chips first so house can drip
     try {
-      await botReclaimFunds({ maxTables: 12 });
+      await botReclaimFunds({ maxTables: 20 });
     } catch {
       // continue
     }
 
     let balance = await publicClient.getBalance({ address: to });
-    if (balance >= TARGET) {
+    if (balance >= MIN_PLAY) {
       recent.set(key, Date.now());
       return NextResponse.json({
         ok: true,
@@ -63,15 +79,26 @@ export async function POST(req: Request) {
       });
     }
 
-    const need = TARGET - balance;
-    const houseBal = await publicClient.getBalance({ address: house.address });
-    const gasReserve = parseEther("0.00005"); // keep bot buy-in + fee top-up + gas
+    const need = target > balance ? target - balance : MIN_PLAY - balance;
+    let houseBal = await publicClient.getBalance({ address: house.address });
+    const gasReserve = parseEther("0.000008"); // leave bot gas for join
+
+    if (houseBal <= gasReserve + MIN_SEND) {
+      try {
+        await botReclaimFunds({ maxTables: 24 });
+        houseBal = await publicClient.getBalance({ address: house.address });
+      } catch {
+        // ignore
+      }
+    }
+
     if (houseBal <= gasReserve + MIN_SEND) {
       return NextResponse.json(
         {
-          error: "Could not set up your seat. Try again in a moment.",
+          error: "House faucet is refilling. Tap Play again in a moment.",
           balanceEth: formatEther(balance),
           funded: false,
+          houseEth: formatEther(houseBal),
         },
         { status: 503 }
       );
@@ -82,7 +109,11 @@ export async function POST(req: Request) {
     const value = send > maxSend ? maxSend : send;
     if (value < MIN_SEND) {
       return NextResponse.json(
-        { error: "House cannot drip enough ETH right now.", funded: false },
+        {
+          error: "House faucet is refilling. Tap Play again in a moment.",
+          funded: false,
+          houseEth: formatEther(houseBal),
+        },
         { status: 503 }
       );
     }
@@ -99,7 +130,7 @@ export async function POST(req: Request) {
 
     return NextResponse.json({
       ok: true,
-      funded: balance >= TARGET,
+      funded: balance >= MIN_PLAY,
       balanceEth: formatEther(balance),
       drippedEth: formatEther(value),
       txHash: hash,

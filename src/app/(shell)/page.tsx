@@ -31,9 +31,9 @@ function friendlyError(raw: string) {
   if (/user rejected|denied|cancelled/i.test(msg)) {
     return "Cancelled. Tap Play when you are ready.";
   }
-  if (/could not set up your seat|house cannot drip|house wallet|drip/i.test(msg)) {
-    return "Getting your seat ready… tap Play again in a moment.";
-  }
+    if (/could not set up your seat|house cannot drip|house wallet|drip|faucet is refilling|faucet is low/i.test(msg)) {
+      return "Getting your seat ready… tap Play again in a moment.";
+    }
   if (/insufficient funds|exceeds balance|gas/i.test(msg)) {
     return "Topping up your seat… tap Play again.";
   }

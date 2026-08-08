@@ -1,7 +1,9 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { sound } from "@/lib/sound";
+import { createClient } from "@/lib/supabase/client";
+import { readLinkedIdentity } from "@/lib/identity";
 
 export interface UserProfile {
   displayName: string;
@@ -149,7 +151,8 @@ const INITIAL_PROFILE: UserProfile = {
 
 const GameContext = createContext<GameContextType | undefined>(undefined);
 
-const STORAGE_KEY = "pi_river_player_state_v1";
+const LEGACY_STORAGE_KEY = "pi_river_player_state_v1";
+const STORAGE_PREFIX = "pi_river_player_state_v2:";
 const DAILY_REWARD_COOLDOWN = 24 * 60 * 60 * 1000;
 
 function getTierForXp(totalXp: number) {
@@ -159,7 +162,50 @@ function getTierForXp(totalXp: number) {
   return "Bronze";
 }
 
+function accountStorageKey(accountKey: string) {
+  return `${STORAGE_PREFIX}${accountKey}`;
+}
+
+function emptySave() {
+  return {
+    chips: 50000,
+    xp: 0,
+    vipTier: getTierForXp(0),
+    equippedCardBack: "classic",
+    equippedTableFelt: "green",
+    ownedCardBacks: ["classic"] as string[],
+    ownedTableFelts: ["green"] as string[],
+    lastDailyBonusTime: null as number | null,
+    rewardTrackDay: 1,
+    stats: { ...INITIAL_STATS },
+    matchHistory: [] as MatchRecord[],
+    soundEnabled: true,
+    profile: { ...INITIAL_PROFILE },
+    megapotCredits: 0,
+    ticketsMinted: 0,
+  };
+}
+
+function readSave(accountKey: string) {
+  try {
+    const raw = localStorage.getItem(accountStorageKey(accountKey));
+    if (raw) return JSON.parse(raw) as ReturnType<typeof emptySave>;
+
+    // One-time migrate from legacy shared key into this account
+    const legacy = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (legacy) {
+      const parsed = JSON.parse(legacy) as ReturnType<typeof emptySave>;
+      localStorage.setItem(accountStorageKey(accountKey), legacy);
+      return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return emptySave();
+}
+
 export function GameProvider({ children }: { children: React.ReactNode }) {
+  const [accountKey, setAccountKey] = useState<string>("guest");
   const [chips, setChips] = useState<number>(50000);
   const [xp, setXp] = useState<number>(0);
   const [vipTier, setVipTier] = useState<string>(getTierForXp(0));
@@ -178,48 +224,83 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [ticketsMinted, setTicketsMinted] = useState(0);
   const [sessionStake, setSessionStake] = useState(1);
   const [isLoaded, setIsLoaded] = useState(false);
+  const accountRef = useRef(accountKey);
+  accountRef.current = accountKey;
 
-  // Load from localStorage on mount
+  // Resolve Google / wallet account so shop + stats stick per real user
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed.chips !== undefined) setChips(parsed.chips);
-        if (parsed.xp !== undefined) setXp(parsed.xp);
-        if (parsed.vipTier) setVipTier(parsed.vipTier);
-        if (parsed.equippedCardBack) setEquippedCardBack(parsed.equippedCardBack);
-        if (parsed.equippedTableFelt) setEquippedTableFelt(parsed.equippedTableFelt);
-        if (parsed.ownedCardBacks) setOwnedCardBacks(parsed.ownedCardBacks);
-        if (parsed.ownedTableFelts) setOwnedTableFelts(parsed.ownedTableFelts);
-        if (parsed.lastDailyBonusTime) setLastDailyBonusTime(parsed.lastDailyBonusTime);
-        if (parsed.rewardTrackDay) setRewardTrackDay(parsed.rewardTrackDay);
-        if (parsed.stats) setStats(parsed.stats);
-        if (parsed.matchHistory) setMatchHistory(parsed.matchHistory);
-        if (parsed.profile) {
-          setProfile((prev) => ({
-            ...prev,
-            ...parsed.profile,
-            avatarUrl: parsed.profile.avatarUrl ?? prev.avatarUrl ?? null,
-            usePresetAvatar: Boolean(parsed.profile.usePresetAvatar),
-          }));
-        }
-        if (parsed.xp !== undefined) setVipTier(getTierForXp(parsed.xp));
-        if (parsed.soundEnabled !== undefined) {
-          setSoundEnabledState(parsed.soundEnabled);
-          sound.enabled = parsed.soundEnabled;
-        }
-        if (typeof parsed.megapotCredits === "number") setMegapotCredits(parsed.megapotCredits);
-        if (typeof parsed.ticketsMinted === "number") setTicketsMinted(parsed.ticketsMinted);
-      }
-    } catch {
-      // Ignore fallback
-    } finally {
-      setIsLoaded(true);
+    const supabase = createClient();
+    let alive = true;
+
+    function applyKey(next: string) {
+      if (!alive) return;
+      setIsLoaded(false);
+      setAccountKey(next);
     }
+
+    async function sync() {
+      const { data } = await supabase.auth.getUser();
+      if (!alive) return;
+      if (data.user?.id) {
+        applyKey(`google:${data.user.id}`);
+        return;
+      }
+      const linked = readLinkedIdentity().walletAddress;
+      applyKey(linked ? `wallet:${linked.toLowerCase()}` : "guest");
+    }
+
+    void sync();
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      if (session?.user?.id) {
+        applyKey(`google:${session.user.id}`);
+        return;
+      }
+      const linked = readLinkedIdentity().walletAddress;
+      applyKey(linked ? `wallet:${linked.toLowerCase()}` : "guest");
+    });
+
+    return () => {
+      alive = false;
+      sub?.subscription?.unsubscribe?.();
+    };
   }, []);
 
-  // Save to localStorage on changes
+  // Load this account's save whenever accountKey changes
+  useEffect(() => {
+    const save = readSave(accountKey);
+    setChips(typeof save.chips === "number" ? save.chips : 50000);
+    setXp(typeof save.xp === "number" ? save.xp : 0);
+    setVipTier(save.vipTier || getTierForXp(save.xp || 0));
+    setEquippedCardBack(save.equippedCardBack || "classic");
+    setEquippedTableFelt(save.equippedTableFelt || "green");
+    setOwnedCardBacks(
+      Array.isArray(save.ownedCardBacks) && save.ownedCardBacks.length
+        ? save.ownedCardBacks
+        : ["classic"]
+    );
+    setOwnedTableFelts(
+      Array.isArray(save.ownedTableFelts) && save.ownedTableFelts.length
+        ? save.ownedTableFelts
+        : ["green"]
+    );
+    setLastDailyBonusTime(save.lastDailyBonusTime ?? null);
+    setRewardTrackDay(save.rewardTrackDay || 1);
+    setStats(save.stats ? { ...INITIAL_STATS, ...save.stats } : INITIAL_STATS);
+    setMatchHistory(Array.isArray(save.matchHistory) ? save.matchHistory : []);
+    setSoundEnabledState(save.soundEnabled !== false);
+    sound.enabled = save.soundEnabled !== false;
+    setProfile({
+      ...INITIAL_PROFILE,
+      ...(save.profile || {}),
+      avatarUrl: save.profile?.avatarUrl ?? null,
+      usePresetAvatar: Boolean(save.profile?.usePresetAvatar),
+    });
+    setMegapotCredits(typeof save.megapotCredits === "number" ? save.megapotCredits : 0);
+    setTicketsMinted(typeof save.ticketsMinted === "number" ? save.ticketsMinted : 0);
+    setIsLoaded(true);
+  }, [accountKey]);
+
+  // Persist to this account only
   useEffect(() => {
     if (!isLoaded) return;
     try {
@@ -240,7 +321,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         megapotCredits,
         ticketsMinted,
       };
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(stateToSave));
+      localStorage.setItem(accountStorageKey(accountRef.current), JSON.stringify(stateToSave));
     } catch {
       // Ignore
     }
@@ -277,47 +358,45 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   };
 
   const equipCardBack = (id: string) => {
-    if (ownedCardBacks.includes(id)) {
-      setEquippedCardBack(id);
-      sound.playClick();
-    }
+    if (!ownedCardBacks.includes(id)) return;
+    setEquippedCardBack(id);
+    sound.playClick();
   };
 
   const equipTableFelt = (id: string) => {
-    if (ownedTableFelts.includes(id)) {
-      setEquippedTableFelt(id);
-      sound.playClick();
-    }
+    if (!ownedTableFelts.includes(id)) return;
+    setEquippedTableFelt(id);
+    sound.playClick();
   };
 
   const buyCardBack = (id: string, priceChips: number): boolean => {
     if (ownedCardBacks.includes(id)) {
-      equipCardBack(id);
-      return true;
-    }
-    if (deductChips(priceChips)) {
-      setOwnedCardBacks((prev) => [...prev, id]);
       setEquippedCardBack(id);
-      addXp(120);
-      sound.playWin();
+      sound.playClick();
       return true;
     }
-    return false;
+    if (chips < priceChips) return false;
+    setChips((prev) => prev - priceChips);
+    setOwnedCardBacks((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setEquippedCardBack(id);
+    addXp(120);
+    sound.playWin();
+    return true;
   };
 
   const buyTableFelt = (id: string, priceChips: number): boolean => {
     if (ownedTableFelts.includes(id)) {
-      equipTableFelt(id);
-      return true;
-    }
-    if (deductChips(priceChips)) {
-      setOwnedTableFelts((prev) => [...prev, id]);
       setEquippedTableFelt(id);
-      addXp(120);
-      sound.playWin();
+      sound.playClick();
       return true;
     }
-    return false;
+    if (chips < priceChips) return false;
+    setChips((prev) => prev - priceChips);
+    setOwnedTableFelts((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setEquippedTableFelt(id);
+    addXp(120);
+    sound.playWin();
+    return true;
   };
 
   const claimDailyBonus = (): boolean => {
@@ -417,7 +496,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setMegapotCredits(0);
     setTicketsMinted(0);
     setSessionStake(1);
-    localStorage.removeItem(STORAGE_KEY);
+    try {
+      localStorage.removeItem(accountStorageKey(accountRef.current));
+    } catch {
+      // ignore
+    }
   };
 
   return (

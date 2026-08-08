@@ -17,6 +17,7 @@ import { BotAvatar } from "@/components/BotAvatar";
 import { useAuthGate } from "@/components/AuthGate";
 import { useGame } from "@/context/GameContext";
 import { cn } from "@/lib/cn";
+import { getCardBack, getTableFelt } from "@/lib/cosmetics";
 import {
   RIVER_HOLDEM_ADDRESS,
   riverHoldemAbi,
@@ -91,14 +92,23 @@ function CardFace({ card, compact = false }: { card: DecodedCard; compact?: bool
   );
 }
 
-function CardBack({ compact = false }: { compact?: boolean }) {
+function CardBack({
+  compact = false,
+  mark = "#F5C518",
+  accent = "from-[#1e293b] to-[#020617]",
+}: {
+  compact?: boolean;
+  mark?: string;
+  accent?: string;
+}) {
   return (
     <div
-      className={`flex items-center justify-center rounded-xl border-2 border-[#F5C518]/35 bg-gradient-to-br from-[#1e293b] to-[#020617] text-[#F5C518] shadow-lg ${
+      className={`flex items-center justify-center rounded-xl border-2 shadow-lg bg-gradient-to-br ${accent} ${
         compact ? "h-14 w-10" : "h-[76px] w-[54px]"
       }`}
+      style={{ borderColor: `${mark}55` }}
     >
-      <SpadeIcon className={compact ? "h-4 w-4" : "h-5 w-5"} />
+      <SpadeIcon className={compact ? "h-4 w-4" : "h-5 w-5"} style={{ color: mark }} />
     </div>
   );
 }
@@ -118,8 +128,12 @@ export default function OnchainTablePage() {
     megapotCredits,
     xp,
     recordHandResult,
+    equippedCardBack,
+    equippedTableFelt,
   } = useGame();
   const play = usePlaySession();
+  const cardStyle = getCardBack(equippedCardBack);
+  const feltStyle = getTableFelt(equippedTableFelt);
   const wagmiPublic = usePublicClient();
   const { data: mmWalletClient } = useWalletClient();
   const { writeContractAsync: mmWrite, isPending: mmPending } = useWriteContract();
@@ -1100,9 +1114,11 @@ export default function OnchainTablePage() {
 
       <div
         className={cn(
-          "relative overflow-hidden rounded-[32px] border border-[#1f6b4a]/55 bg-[radial-gradient(ellipse_at_center,#1a7a4f_0%,#0c3d2c_48%,#061910_100%)] shadow-[0_30px_80px_rgba(0,0,0,0.5)]",
+          "relative overflow-hidden rounded-[32px] shadow-[0_30px_80px_rgba(0,0,0,0.5)] border",
+          feltStyle.border,
           wideView ? "min-h-[480px] px-5 pb-10 pt-7 sm:min-h-[560px] sm:px-16 md:px-24" : "px-4 pb-5 pt-4"
         )}
+        style={{ background: feltStyle.felt }}
       >
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.14]"
@@ -1133,8 +1149,8 @@ export default function OnchainTablePage() {
             </div>
           </div>
           <div className="flex gap-1.5 opacity-80">
-            <CardBack compact />
-            <CardBack compact />
+            <CardBack compact mark={cardStyle.mark} accent={cardStyle.accent} />
+            <CardBack compact mark={cardStyle.mark} accent={cardStyle.accent} />
           </div>
         </div>
 
@@ -1146,7 +1162,9 @@ export default function OnchainTablePage() {
             {boardCards.length
               ? boardCards.map((c) => <CardFace key={c.id + c.label} card={c} />)
               : table?.boardCount
-                ? Array.from({ length: table.boardCount }).map((_, i) => <CardBack key={i} />)
+                ? Array.from({ length: table.boardCount }).map((_, i) => (
+                    <CardBack key={i} mark={cardStyle.mark} accent={cardStyle.accent} />
+                  ))
                 : (
                   <p className="text-center text-xs text-[#9dceb4]/70">
                     Board opens after preflop bets
@@ -1161,8 +1179,8 @@ export default function OnchainTablePage() {
               myCards.map((c) => <CardFace key={c.id} card={c} />)
             ) : (
               <>
-                <CardBack />
-                <CardBack />
+                <CardBack mark={cardStyle.mark} accent={cardStyle.accent} />
+                <CardBack mark={cardStyle.mark} accent={cardStyle.accent} />
               </>
             )}
           </div>

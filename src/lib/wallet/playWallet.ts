@@ -20,8 +20,10 @@ import {
 } from "@/lib/contracts/riverHoldem";
 
 const STORAGE_KEY = "pi_river_play_wallets_v1";
-/** Buy-in + share of Inco shuffle fee (~0.000104/hand) + gas */
-const PLAY_NEED = 15n * 10n ** 12n + 80n * 10n ** 12n + 12n * 10n ** 12n; // ~0.000107
+/** Minimum to open a table: buy-in + light gas (shuffle fee topped up separately). */
+export const PLAY_MIN = 15n * 10n ** 12n + 6n * 10n ** 12n; // ~0.000021
+/** Prefer a bit of headroom when house can afford it. */
+const PLAY_TARGET = 28n * 10n ** 12n; // ~0.000028
 
 type PlayWalletStore = Record<string, Hex>;
 
@@ -209,7 +211,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
   const address = getPlayAddress(googleUserId);
   const publicClient = getPlayPublicClient();
   let balance = await publicClient.getBalance({ address });
-  if (balance >= PLAY_NEED) {
+  if (balance >= PLAY_MIN) {
     return { ok: true, funded: true, balanceEth: formatEther(balance), drippedEth: "0" };
   }
 
@@ -220,7 +222,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
     // continue to drip
   }
   balance = await publicClient.getBalance({ address });
-  if (balance >= PLAY_NEED) {
+  if (balance >= PLAY_MIN) {
     return {
       ok: true,
       funded: true,
@@ -233,7 +235,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
   const res = await fetch("/api/play/drip", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address, googleUserId }),
+    body: JSON.stringify({ address, googleUserId, targetEth: formatEther(PLAY_TARGET) }),
   });
   const data = (await res.json()) as {
     ok?: boolean;
@@ -244,7 +246,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
   };
 
   balance = await publicClient.getBalance({ address });
-  if (balance >= PLAY_NEED) {
+  if (balance >= PLAY_MIN) {
     return {
       ok: true,
       funded: true,
@@ -256,8 +258,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
   if (!res.ok) {
     throw new Error(data.error || "Could not set up your seat. Try again.");
   }
-  if (!data.funded) {
-    throw new Error("Could not set up your seat. Try again in a moment.");
-  }
-  return data;
+  throw new Error(
+    data.error || "Seat faucet is low. Tap Play again in a moment after the house refills."
+  );
 }

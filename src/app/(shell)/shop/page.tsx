@@ -10,61 +10,10 @@ import {
   TableIcon,
 } from "@/components/icons";
 import { useGame } from "@/context/GameContext";
+import { CARD_BACKS, TABLE_FELTS } from "@/lib/cosmetics";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
-
-const cardBacks = [
-  {
-    id: "classic",
-    name: "Midnight Classic",
-    price: 0,
-    accent: "from-[#1e293b] to-[#020617]",
-    mark: "#94a3b8",
-  },
-  {
-    id: "neon",
-    name: "Pulse Orbit",
-    price: 10000,
-    accent: "from-[#0891b2] to-[#1d4ed8]",
-    mark: "#67e8f9",
-  },
-  {
-    id: "royal",
-    name: "Royal Current",
-    price: 25000,
-    accent: "from-[#7c3aed] to-[#4c1d95]",
-    mark: "#c4b5fd",
-  },
-  {
-    id: "gold",
-    name: "Gold Rush",
-    price: 50000,
-    accent: "from-[#f59e0b] to-[#b45309]",
-    mark: "#fde68a",
-  },
-  {
-    id: "flow",
-    name: "River Bloom",
-    price: 100000,
-    accent: "from-[#14b8a6] to-[#0f766e]",
-    mark: "#99f6e4",
-  },
-  {
-    id: "inco",
-    name: "Lightning Lockup",
-    price: 200000,
-    accent: "from-[#6366f1] to-[#db2777]",
-    mark: "#fbcfe8",
-  },
-];
-
-const tableFelts = [
-  { id: "green", name: "Forest Felt", price: 0, tone: "from-[#14532d] to-[#052e16]", chip: "#86efac" },
-  { id: "blue", name: "Deep Current", price: 15000, tone: "from-[#1e3a8a] to-[#0f172a]", chip: "#93c5fd" },
-  { id: "purple", name: "Night Velvet", price: 30000, tone: "from-[#581c87] to-[#1e1b4b]", chip: "#d8b4fe" },
-  { id: "red", name: "Redline Room", price: 50000, tone: "from-[#7f1d1d] to-[#450a0a]", chip: "#fda4af" },
-];
 
 function CardBackArt({ mark }: { mark: string }) {
   return (
@@ -119,7 +68,7 @@ export default function ShopPage() {
 
   const announce = (message: string) => {
     setNotice(message);
-    window.setTimeout(() => setNotice(null), 1800);
+    window.setTimeout(() => setNotice(null), 2200);
   };
 
   return (
@@ -127,7 +76,7 @@ export default function ShopPage() {
       <SectionHeader
         eyebrow="Style up"
         title="Shop"
-        description="Spend fun chips on card backs and table looks. Equip what you like, then hit Play."
+        description="Buy with fun chips. Cosmetics save to your Google account on this device and show at the table."
       />
 
       {notice ? (
@@ -172,7 +121,7 @@ export default function ShopPage() {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {cardBacks.map((item) => {
+          {CARD_BACKS.map((item) => {
             const owned = ownedCardBacks.includes(item.id);
             const equipped = equippedCardBack === item.id;
 
@@ -203,12 +152,13 @@ export default function ShopPage() {
                       onClick={() => {
                         if (owned) {
                           equipCardBack(item.id);
-                          announce(`${item.name} equipped.`);
+                          announce(`${item.name} equipped — opens at your next table.`);
                         } else {
+                          const ok = buyCardBack(item.id, item.price);
                           announce(
-                            buyCardBack(item.id, item.price)
-                              ? `${item.name} unlocked.`
-                              : "Not enough chips."
+                            ok
+                              ? `${item.name} bought & equipped.`
+                              : `Need ${item.price.toLocaleString()} chips.`
                           );
                         }
                       }}
@@ -235,7 +185,7 @@ export default function ShopPage() {
         </div>
 
         <div className="grid gap-3 md:grid-cols-2">
-          {tableFelts.map((item) => {
+          {TABLE_FELTS.map((item) => {
             const owned = ownedTableFelts.includes(item.id);
             const equipped = equippedTableFelt === item.id;
 
@@ -265,12 +215,13 @@ export default function ShopPage() {
                     onClick={() => {
                       if (owned) {
                         equipTableFelt(item.id);
-                        announce(`${item.name} equipped.`);
+                        announce(`${item.name} equipped — opens at your next table.`);
                       } else {
+                        const ok = buyTableFelt(item.id, item.price);
                         announce(
-                          buyTableFelt(item.id, item.price)
-                            ? `${item.name} unlocked.`
-                            : "Not enough chips."
+                          ok
+                            ? `${item.name} bought & equipped.`
+                            : `Need ${item.price.toLocaleString()} chips.`
                         );
                       }
                     }}
