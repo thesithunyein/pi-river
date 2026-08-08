@@ -250,7 +250,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
 
     void sync();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e: string, session: { user: { id: string } | null } | null) => {
       if (session?.user?.id) {
         applyKey(`google:${session.user.id}`);
         return;
