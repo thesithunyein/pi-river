@@ -1,8 +1,9 @@
 export const RIVER_HOLDEM_ADDRESS = (process.env.NEXT_PUBLIC_RIVER_HOLDEM_ADDRESS ||
-  "") as `0x${string}`;
+  "0x4aa17Ff6daF4fa5F400Fe21192e9A311a580addc") as `0x${string}`;
 
 /** Prior deploys that may still hold player/bot stacks. */
 export const LEGACY_RIVER_HOLDEM_ADDRESSES = [
+  "0x68F574d88d699e4027395A9a1649595fDe383571",
   "0x5069540F171a11B44B0067979a96b64BcB05E175",
   "0x26f67a715201332c471cf5EdE68dB3d300549080",
   "0xAE870b501E6265ED29b17259549C3CCca9017803",
@@ -73,6 +74,13 @@ export const riverHoldemAbi = [
     stateMutability: "nonpayable",
     inputs: [{ name: "tableId", type: "uint256" }],
     outputs: [],
+  },
+  {
+    type: "function",
+    name: "getShowdownFilled",
+    stateMutability: "view",
+    inputs: [{ name: "tableId", type: "uint256" }],
+    outputs: [{ type: "uint16" }],
   },
   {
     type: "function",

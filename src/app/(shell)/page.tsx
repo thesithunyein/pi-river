@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { parseEther, decodeEventLog } from "viem";
 import {
   useAccount,
@@ -12,6 +12,7 @@ import {
 import {
   BoltIcon,
   CardsIcon,
+  SpadeIcon,
   UserIcon,
 } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
@@ -21,8 +22,23 @@ import { forceBaseSepolia, baseSepolia } from "@/lib/wallet/forceBaseSepolia";
 import { usePlaySession } from "@/hooks/usePlaySession";
 import { useAuthGate } from "@/components/AuthGate";
 import { useGame } from "@/context/GameContext";
+import { activeTableHref, clearActiveTable, readActiveTable, type ActiveTable } from "@/lib/activeTable";
+import { PlayerLevelBadge } from "@/components/PlayerLevelBadge";
+import { PremiumChip } from "@/components/PremiumChip";
+import { PremiumPageShell } from "@/components/ui/PremiumPageShell";
+import {
+  challengeInviteUrl,
+  pushRecentChallenge,
+  readRecentChallenges,
+} from "@/lib/recentChallenges";
+import {
+  FriendsChallengePanel,
+  pushChallengeToFriend,
+} from "@/components/FriendsChallengePanel";
+import type { Friend } from "@/lib/friends";
 
 const BUY_IN = parseEther("0.000015");
+const ZERO = "0x0000000000000000000000000000000000000000";
 
 type PlayMode = "bot" | "friend";
 
@@ -31,14 +47,17 @@ function friendlyError(raw: string) {
   if (/user rejected|denied|cancelled/i.test(msg)) {
     return "Cancelled. Tap Play when you are ready.";
   }
-    if (/could not set up your seat|house cannot drip|house wallet|drip|faucet is refilling|faucet is low/i.test(msg)) {
-      return "Getting your seat ready… tap Play again in a moment.";
-    }
+  if (/could not set up your seat|house cannot drip|house wallet|drip|faucet is refilling|faucet is low/i.test(msg)) {
+    return "Getting your seat ready… tap Play again in a moment.";
+  }
   if (/insufficient funds|exceeds balance|gas/i.test(msg)) {
     return "Topping up your seat… tap Play again.";
   }
+  if (/already|full|taken|seat/i.test(msg)) {
+    return "That table is full or already started. Ask for a fresh Challenge #.";
+  }
   if (/bot|opponent|join|ready|fund|matchmaking/i.test(msg)) {
-    return "Finding your match. Tap Play again.";
+    return "Seating… tap Play again.";
   }
   if (msg.length > 120) return "Something went wrong. Tap Play to retry.";
   return msg;
@@ -46,18 +65,38 @@ function friendlyError(raw: string) {
 
 export default function LobbyPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isConnected, chainId, address: mmAddress } = useAccount();
   const { googleUser } = useAuthGate();
-  const { startMegapotSession, megapotCredits } = useGame();
+  const { startMegapotSession, megapotCredits, xp, stats, profile } = useGame();
   const play = usePlaySession();
   const wagmiPublic = usePublicClient();
   const { switchChainAsync } = useSwitchChain();
   const [mode, setMode] = useState<PlayMode>("bot");
+  const [liveTable, setLiveTable] = useState<ActiveTable | null>(null);
+  const [challengeTarget, setChallengeTarget] = useState<Friend | null>(null);
+
+  useEffect(() => {
+    setLiveTable(readActiveTable());
+  }, []);
   const [joinId, setJoinId] = useState("");
   const [status, setStatus] = useState("");
   const [busy, setBusy] = useState(false);
   const [botReady, setBotReady] = useState<boolean | null>(null);
   const [stuckHuman, setStuckHuman] = useState<{ tableId: string; toAct: string }[]>([]);
+  const [recentChallenges, setRecentChallenges] = useState<
+    { tableId: string; createdAt: number; role: "host" | "guest" }[]
+  >([]);
+  const lastWakeAt = useRef(0);
+
+  useEffect(() => {
+    const invite = searchParams.get("join") || searchParams.get("challenge");
+    if (invite && /^\d+$/.test(invite)) {
+      setMode("friend");
+      setJoinId(invite);
+      setStatus(`Invite loaded — table #${invite}. Tap Join when ready.`);
+    }
+  }, [searchParams]);
 
   const { writeContractAsync, isPending } = useWriteContract();
 
@@ -99,19 +138,38 @@ export default function LobbyPage() {
   }
 
   useEffect(() => {
+    setRecentChallenges(readRecentChallenges());
+    const sync = () => setRecentChallenges(readRecentChallenges());
+    window.addEventListener("pi-river-challenges", sync);
+    window.addEventListener("focus", sync);
+    return () => {
+      window.removeEventListener("pi-river-challenges", sync);
+      window.removeEventListener("focus", sync);
+    };
+  }, []);
+
+  useEffect(() => {
     refreshBot().then(() => {
+      lastWakeAt.current = Date.now();
       fetch("/api/bot/wake", { method: "POST" })
-        .then(() => refreshBot())
+        .then(() => {
+          lastWakeAt.current = Date.now();
+          return refreshBot();
+        })
         .catch(() => {});
     });
   }, []);
 
   async function autoPrepare() {
     setStatus("Getting your table ready…");
-    try {
-      await fetch("/api/bot/wake", { method: "POST" });
-    } catch {
-      // ignore
+    const wokeRecently = Date.now() - lastWakeAt.current < 25_000 && botReady === true;
+    if (!wokeRecently) {
+      try {
+        await fetch("/api/bot/wake", { method: "POST" });
+        lastWakeAt.current = Date.now();
+      } catch {
+        // ignore
+      }
     }
 
     const infoRes = await fetch("/api/bot/info");
@@ -163,7 +221,43 @@ export default function LobbyPage() {
     await refreshBot();
   }
 
-  async function createAndMaybeInviteBot() {
+  async function afterFriendTableCreated(tableId: string, stake: number, targetOverride?: Friend | null) {
+    pushRecentChallenge(tableId, "host");
+    const target = targetOverride !== undefined ? targetOverride : challengeTarget;
+    if (target && googleUser?.id) {
+      setStatus(`Pushing Challenge to ${target.n}…`);
+      try {
+        await pushChallengeToFriend({
+          friendCode: target.c,
+          tableId,
+          fromName: profile.displayName || "Player",
+          fromUserId: googleUser.id,
+        });
+        setStatus(`Pushed to ${target.n}. Opening table…`);
+      } catch {
+        setStatus("Invite link ready — friend may need the link if offline.");
+      }
+    }
+    try {
+      await navigator.clipboard.writeText(challengeInviteUrl(tableId));
+    } catch {
+      // ignore
+    }
+    router.push(`/table/${tableId}?mode=friend&stake=${stake}`);
+  }
+
+  async function createAndMaybeInviteBot(friendOverride?: Friend | null) {
+    const asFriend =
+      friendOverride &&
+      typeof friendOverride === "object" &&
+      "c" in friendOverride &&
+      typeof (friendOverride as Friend).c === "string"
+        ? (friendOverride as Friend)
+        : friendOverride === null
+          ? null
+          : undefined;
+    if (asFriend) setChallengeTarget(asFriend);
+    const pushTarget = asFriend !== undefined ? asFriend : challengeTarget;
     if (!contractReady) {
       setStatus("Game is warming up. Try again in a moment.");
       return;
@@ -199,7 +293,7 @@ export default function LobbyPage() {
           setStatus(friendlyError(err instanceof Error ? err.message : "setup failed"));
           return;
         }
-        setStatus(mode === "bot" ? "Finding a match…" : "Opening your table…");
+        setStatus(mode === "bot" ? "Opening table…" : "Opening your Challenge…");
         const hash = await play.writeContract({
           address: RIVER_HOLDEM_ADDRESS,
           abi: riverHoldemAbi,
@@ -228,7 +322,7 @@ export default function LobbyPage() {
           return;
         }
         if (mode === "bot") {
-          setStatus("Warming up the table…");
+          setStatus("Seating River Bot…");
           try {
             // Prefund Inco shuffle fee so bot join → deal does not revert
             const feeNeed = parseEther("0.00009");
@@ -245,20 +339,28 @@ export default function LobbyPage() {
           } catch {
             // join route / table Retry seat will fund if needed
           }
-          setStatus("Opponent joining…");
-          const joinRes = await fetch("/api/bot/join", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tableId: tableId.toString() }),
-          });
-          if (!joinRes.ok) {
-            // Still open the table — auto-seat / Sit opponent can finish join
-            setStatus("Table ready. Seating opponent…");
+          setStatus("Seating River Bot…");
+          let seated = false;
+          for (let i = 0; i < 3 && !seated; i++) {
+            if (i > 0) {
+              setStatus(`Seating River Bot… (${i + 1}/3)`);
+              await fetch("/api/bot/wake", { method: "POST" }).catch(() => null);
+              await new Promise((r) => setTimeout(r, 280 * i));
+            }
+            const joinRes = await fetch("/api/bot/join", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tableId: tableId.toString() }),
+            });
+            seated = joinRes.ok;
           }
-          router.push(`/table/${tableId.toString()}?mode=bot&stake=${stake}`);
+          if (!seated) setStatus("Table ready — finishing seat…");
+          router.push(
+            `/table/${tableId.toString()}?mode=bot&stake=${stake}${seated ? "&seated=1" : ""}`
+          );
           return;
         }
-        router.push(`/table/${tableId.toString()}?mode=friend&stake=${stake}`);
+        await afterFriendTableCreated(tableId.toString(), stake, pushTarget);
         return;
       }
 
@@ -269,7 +371,7 @@ export default function LobbyPage() {
           return;
         }
       }
-      setStatus(mode === "bot" ? "Finding a match…" : "Opening your table…");
+      setStatus(mode === "bot" ? "Opening table…" : "Opening your Challenge…");
       const hash = await writeContractAsync({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
@@ -299,16 +401,29 @@ export default function LobbyPage() {
         return;
       }
       if (mode === "bot") {
-        setStatus("Opponent joining…");
-        await fetch("/api/bot/join", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tableId: tableId.toString() }),
-        });
-        router.push(`/table/${tableId.toString()}?mode=bot&stake=${stake}`);
+        setStatus("Seating River Bot…");
+        let seated = false;
+        for (let i = 0; i < 3; i++) {
+          if (i > 0 && Date.now() - lastWakeAt.current > 20_000) {
+            await fetch("/api/bot/wake", { method: "POST" }).catch(() => null);
+            lastWakeAt.current = Date.now();
+          }
+          const joinRes = await fetch("/api/bot/join", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tableId: tableId.toString() }),
+          });
+          if (joinRes.ok) {
+            seated = true;
+            break;
+          }
+        }
+        router.push(
+          `/table/${tableId.toString()}?mode=bot&stake=${stake}${seated ? "&seated=1" : ""}`
+        );
         return;
       }
-      router.push(`/table/${tableId.toString()}?mode=friend&stake=${stake}`);
+      await afterFriendTableCreated(tableId.toString(), stake, pushTarget);
     } catch (err) {
       setStatus(friendlyError(err instanceof Error ? err.message : "Could not start"));
     } finally {
@@ -342,10 +457,32 @@ export default function LobbyPage() {
     setBusy(true);
     try {
       startMegapotSession("friend");
+      const client = silent ? play.publicClient : publicClient;
+      if (client) {
+        setStatus("Checking table…");
+        try {
+          const row = (await client.readContract({
+            address: RIVER_HOLDEM_ADDRESS,
+            abi: riverHoldemAbi,
+            functionName: "tables",
+            args: [id],
+          })) as readonly [`0x${string}`, `0x${string}`, ...unknown[]];
+          if (!row[0] || row[0].toLowerCase() === ZERO.toLowerCase()) {
+            setStatus("No open Challenge with that #. Ask your friend to create one.");
+            return;
+          }
+          if (row[1] && row[1].toLowerCase() !== ZERO.toLowerCase()) {
+            setStatus("That table is already full. Ask for a new Challenge #.");
+            return;
+          }
+        } catch {
+          // join will still try
+        }
+      }
       if (silent) {
         setStatus("Setting up your seat…");
         await play.ensureFunded();
-        setStatus("Joining table…");
+        setStatus("Joining Challenge…");
         const hash = await play.writeContract({
           address: RIVER_HOLDEM_ADDRESS,
           abi: riverHoldemAbi,
@@ -354,11 +491,12 @@ export default function LobbyPage() {
           value: BUY_IN,
         });
         await play.waitForTx(hash);
+        pushRecentChallenge(id.toString(), "guest");
         router.push(`/table/${id.toString()}?mode=friend&stake=2`);
         return;
       }
       if (!(await ensureBaseSepolia())) return;
-      setStatus("Joining table…");
+      setStatus("Joining Challenge…");
       const hash = await writeContractAsync({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
@@ -368,6 +506,7 @@ export default function LobbyPage() {
         chainId: baseSepolia.id,
       });
       await publicClient!.waitForTransactionReceipt({ hash });
+      pushRecentChallenge(id.toString(), "guest");
       router.push(`/table/${id.toString()}?mode=friend&stake=2`);
     } catch (err) {
       setStatus(friendlyError(err instanceof Error ? err.message : "Could not join"));
@@ -377,8 +516,12 @@ export default function LobbyPage() {
   }
 
   return (
-    <div className="animate-fade-in space-y-5">
-      <section className="relative overflow-hidden rounded-[32px] border border-[#2a6b4a]/50 bg-[radial-gradient(ellipse_at_center,#1b6b45_0%,#0d3a28_55%,#071a14_100%)] px-5 pb-6 pt-7 shadow-[0_24px_80px_rgba(0,0,0,0.45)] sm:px-8">
+    <PremiumPageShell tone="green" className="space-y-5">
+      <section className="relative overflow-hidden rounded-[34px] border border-[#F5C518]/30 bg-[radial-gradient(ellipse_at_center,#248a58_0%,#145c3c_32%,#0d3a28_62%,#061510_100%)] px-5 pb-7 pt-8 shadow-[0_30px_90px_rgba(0,0,0,0.55),0_0_0_1px_rgba(245,197,24,0.12)] sm:px-8">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#F5C518]/45 to-transparent"
+        />
         <div
           className="pointer-events-none absolute inset-0 opacity-[0.12]"
           style={{
@@ -388,14 +531,25 @@ export default function LobbyPage() {
           }}
         />
         <div className="relative mx-auto flex max-w-lg flex-col items-center text-center">
-          <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-[#9dceb4]">
-            Private heads up poker
-          </p>
-          <h1 className="font-display text-4xl font-black leading-[1.05] text-white sm:text-5xl">
-            Sit down.
-            <br />
-            <span className="text-[#F5C518]">Have fun.</span>
-          </h1>
+            <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-[#9dceb4]">
+              Premium private heads-up
+            </p>
+            <h1 className="font-display text-4xl font-black leading-[1.05] text-white sm:text-5xl">
+              Sit down.
+              <br />
+              <span className="text-[#F5C518]">Have fun.</span>
+            </h1>
+            <div className="mt-4 flex justify-center gap-3">
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-[#F5C518]/35 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                <SpadeIcon className="h-7 w-7 text-[#F5C518]" />
+              </span>
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                <CardsIcon className="h-7 w-7 text-[#86efac]" />
+              </span>
+              <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
+                <BoltIcon className="h-7 w-7 text-[#86efac]" />
+              </span>
+            </div>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-[#b7d7c6]">
             Tap Play. Your cards stay private. Wins earn jackpot tickets.
             {megapotCredits > 0
@@ -403,36 +557,75 @@ export default function LobbyPage() {
               : ""}
           </p>
 
-          <div className="mt-5 grid w-full grid-cols-2 gap-2 rounded-[22px] border border-white/10 bg-black/25 p-1.5">
+          {liveTable ? (
+            <div className="mt-5 w-full space-y-2 rounded-[22px] border border-[#F5C518]/35 bg-black/30 p-3 text-left shadow-[0_0_0_1px_rgba(245,197,24,0.08)]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-[#F5C518]">Live table</p>
+              <p className="text-sm font-black text-white">
+                Table #{liveTable.id} · {liveTable.mode === "friend" ? "Friend" : "vs Bot"}
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <GradientButton
+                  className="min-h-11"
+                  onClick={() => router.push(activeTableHref(liveTable))}
+                >
+                  Resume hand
+                </GradientButton>
+                <GradientButton
+                  variant="secondary"
+                  className="min-h-11"
+                  onClick={() => {
+                    clearActiveTable();
+                    setLiveTable(null);
+                  }}
+                >
+                  New match
+                </GradientButton>
+              </div>
+            </div>
+          ) : null}
+
+          <div className="mt-5 grid w-full grid-cols-2 gap-3">
             <button
               type="button"
               onClick={() => setMode("bot")}
               className={cn(
-                "rounded-[16px] px-3 py-3 text-sm font-black transition",
+                "relative overflow-hidden rounded-[24px] border p-4 text-left transition",
                 mode === "bot"
-                  ? "bg-gradient-to-b from-[#F5C518] to-[#E29A12] text-[#1A1400] shadow-[0_8px_24px_rgba(245,197,24,0.3)]"
-                  : "text-[#b7d7c6] hover:bg-white/5"
+                  ? "border-[#F5C518]/55 bg-gradient-to-br from-[#3a2d0a] via-[#1a1520] to-[#0f0d18] shadow-[0_16px_40px_rgba(245,197,24,0.25)]"
+                  : "border-white/10 bg-black/25 hover:border-white/20"
               )}
             >
-              Quick Play
-              <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider opacity-80">
-                vs Bot
-              </span>
+              <div className="mb-3 flex items-center gap-2">
+                <PremiumChip size={40} tone="gold" />
+                <BoltIcon className={cn("h-5 w-5", mode === "bot" ? "text-[#F5C518]" : "text-[#9dceb4]")} />
+              </div>
+              <p className={cn("text-base font-black", mode === "bot" ? "text-white" : "text-[#b7d7c6]")}>
+                Quick Play
+              </p>
+              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[#9dceb4]">
+                vs Bot · instant
+              </p>
             </button>
             <button
               type="button"
               onClick={() => setMode("friend")}
               className={cn(
-                "rounded-[16px] px-3 py-3 text-sm font-black transition",
+                "relative overflow-hidden rounded-[24px] border p-4 text-left transition",
                 mode === "friend"
-                  ? "bg-gradient-to-b from-[#F5C518] to-[#E29A12] text-[#1A1400] shadow-[0_8px_24px_rgba(245,197,24,0.3)]"
-                  : "text-[#b7d7c6] hover:bg-white/5"
+                  ? "border-emerald-400/50 bg-gradient-to-br from-[#0f2a1c] via-[#122018] to-[#0f0d18] shadow-[0_16px_40px_rgba(52,211,153,0.2)]"
+                  : "border-white/10 bg-black/25 hover:border-white/20"
               )}
             >
-              Challenge
-              <span className="mt-0.5 block text-[10px] font-bold uppercase tracking-wider opacity-80">
-                vs Friend
-              </span>
+              <div className="mb-3 flex items-center gap-2">
+                <PremiumChip size={40} tone="green" />
+                <UserIcon className={cn("h-5 w-5", mode === "friend" ? "text-[#86efac]" : "text-[#9dceb4]")} />
+              </div>
+              <p className={cn("text-base font-black", mode === "friend" ? "text-white" : "text-[#b7d7c6]")}>
+                Challenge
+              </p>
+              <p className="mt-0.5 text-[10px] font-bold uppercase tracking-wider text-[#9dceb4]">
+                vs Friend · push
+              </p>
             </button>
           </div>
 
@@ -440,7 +633,7 @@ export default function LobbyPage() {
             <GradientButton
               className="w-full min-h-14 text-base"
               icon={mode === "bot" ? <BoltIcon className="h-5 w-5" /> : <UserIcon className="h-5 w-5" />}
-              onClick={createAndMaybeInviteBot}
+              onClick={() => void createAndMaybeInviteBot()}
               disabled={
                 waiting ||
                 (Boolean(googleUser) && !play.ready) ||
@@ -452,8 +645,8 @@ export default function LobbyPage() {
                 : googleUser && !play.ready
                   ? "Preparing seat…"
                   : mode === "bot"
-                    ? "Play now"
-                    : "Create friend table"}
+                    ? "Quick Play"
+                    : "Create Challenge"}
             </GradientButton>
 
             {waiting && status ? (
@@ -461,36 +654,101 @@ export default function LobbyPage() {
             ) : (
               <p className="text-[11px] font-semibold leading-relaxed text-[#9dceb4]/90">
                 {mode === "bot"
-                  ? "One tap. Private cards. Instant match."
-                  : "Create a table, then share the number with a friend."}
+                  ? "No waiting room — River Bot sits as soon as the chain confirms. Seat faucet covers several hands."
+                  : "Add a friend code, tap Challenge, or share the invite link."}
               </p>
             )}
 
             {mode === "friend" ? (
-              <div className="flex gap-2">
-                <input
-                  value={joinId}
-                  onChange={(e) => setJoinId(e.target.value.replace(/[^\d]/g, ""))}
-                  placeholder="Friend table number"
-                  inputMode="numeric"
-                  className="min-h-14 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 text-center text-base font-bold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
+              <div className="w-full space-y-3">
+                <FriendsChallengePanel
+                  selectedCode={challengeTarget?.c ?? null}
+                  onSelectFriend={setChallengeTarget}
+                  onRequestChallenge={(f) => {
+                    setChallengeTarget(f);
+                    setStatus(`Opening Challenge for ${f.n}…`);
+                    void createAndMaybeInviteBot(f);
+                  }}
                 />
-                <GradientButton
-                  variant="secondary"
-                  className="min-h-14 min-w-[7.5rem] border-white/15 bg-black/30"
-                  icon={<CardsIcon className="h-5 w-5" />}
-                  onClick={joinTable}
-                  disabled={waiting}
-                >
-                  Join
-                </GradientButton>
+                <div className="flex gap-2">
+                  <input
+                    value={joinId}
+                    onChange={(e) => setJoinId(e.target.value.replace(/[^\d]/g, ""))}
+                    placeholder="Challenge table #"
+                    inputMode="numeric"
+                    className="min-h-14 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 text-center text-base font-bold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
+                  />
+                  <GradientButton
+                    variant="secondary"
+                    className="min-h-14 min-w-[7.5rem] border-white/15 bg-black/30"
+                    icon={<CardsIcon className="h-5 w-5" />}
+                    onClick={joinTable}
+                    disabled={waiting}
+                  >
+                    Join
+                  </GradientButton>
+                </div>
+                {recentChallenges.length > 0 ? (
+                  <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-left">
+                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9dceb4]">
+                      Recent Challenges
+                    </p>
+                    <div className="mt-2 space-y-1.5">
+                      {recentChallenges.slice(0, 4).map((c) => (
+                        <div
+                          key={`${c.tableId}-${c.createdAt}`}
+                          className="flex items-center gap-2"
+                        >
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 truncate text-left text-sm font-bold text-white hover:text-[#F5C518]"
+                            onClick={() => {
+                              setJoinId(c.tableId);
+                              setStatus(
+                                c.role === "host"
+                                  ? `Your table #${c.tableId} — share or Resume if live.`
+                                  : `Invite #${c.tableId} loaded — tap Join.`
+                              );
+                            }}
+                          >
+                            #{c.tableId} · {c.role === "host" ? "Hosted" : "Joined"}
+                          </button>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded-full border border-white/10 px-2.5 py-1 text-[10px] font-bold text-[#F5C518]"
+                            onClick={async () => {
+                              try {
+                                await navigator.clipboard.writeText(challengeInviteUrl(c.tableId));
+                                setStatus("Invite link copied.");
+                              } catch {
+                                setStatus(challengeInviteUrl(c.tableId));
+                              }
+                            }}
+                          >
+                            Copy link
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>
 
+          {botReady === false && mode === "bot" && !waiting ? (
+            <p className="mt-2 text-[11px] font-semibold text-[#F5C518]/90">
+              Warming house bot… tap Quick Play in a moment if needed.
+            </p>
+          ) : null}
+
           {!waiting && status ? (
             <p className="mt-3 text-sm font-semibold text-[#F5C518]">{status}</p>
           ) : null}
+
+          <div className="mt-5 w-full text-left">
+            <PlayerLevelBadge xp={xp} wins={stats.gamesWon} />
+          </div>
 
           {!waiting && myStuckTables.length > 0 && botReady === false ? (
             <button
@@ -503,6 +761,6 @@ export default function LobbyPage() {
           ) : null}
         </div>
       </section>
-    </div>
+    </PremiumPageShell>
   );
 }

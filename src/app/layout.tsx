@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Nunito, Plus_Jakarta_Sans } from "next/font/google";
 import { Web3Provider } from "@/components/Web3Provider";
 import { GameProvider } from "@/context/GameContext";
+import { AudioBootstrap } from "@/components/AudioBootstrap";
 import "./globals.css";
 
 const bodyFont = Plus_Jakarta_Sans({
@@ -30,7 +31,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         className={`${bodyFont.variable} ${displayFont.variable} min-h-screen bg-river-bg text-river-white antialiased`}
       >
         <Web3Provider>
-          <GameProvider>{children}</GameProvider>
+          <GameProvider>
+            <AudioBootstrap />
+            {children}
+          </GameProvider>
         </Web3Provider>
       </body>
     </html>

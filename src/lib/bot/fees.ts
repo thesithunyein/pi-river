@@ -38,7 +38,7 @@ export async function shuffleFeeShortfall(incomingBuyIn = 0n): Promise<bigint> {
 
 /**
  * Top up RiverHoldem.fundFees so joinTable → _startHand does not revert
- * with "fund shuffle fee".
+ * with "fund shuffle fee". Prefunds ~3 hands when short.
  */
 export async function ensureShuffleFees(incomingBuyIn = 0n): Promise<{
   funded: boolean;
@@ -47,7 +47,39 @@ export async function ensureShuffleFees(incomingBuyIn = 0n): Promise<{
 }> {
   const shortfall = await shuffleFeeShortfall(incomingBuyIn);
   if (shortfall === 0n) {
-    return { funded: false, shortfall: 0n, hash: null };
+    // Keep a multi-hand buffer on the contract when house can afford it
+    const fee = await readDeckFee();
+    const client = getBotPublicClient();
+    const bal = await client.getBalance({ address: RIVER_HOLDEM_ADDRESS });
+    const want = fee * 3n + FEE_BUFFER;
+    if (bal >= want) {
+      return { funded: false, shortfall: 0n, hash: null };
+    }
+    const topUp = want - bal;
+    const account = getBotAccount();
+    const wallet = getBotWalletClient();
+    if (!account || !wallet || !RIVER_HOLDEM_ADDRESS) {
+      return { funded: false, shortfall: 0n, hash: null };
+    }
+    const botBal = await client.getBalance({ address: account.address });
+    const available = botBal > GAS_RESERVE ? botBal - GAS_RESERVE : 0n;
+    if (available < topUp) {
+      return { funded: false, shortfall: 0n, hash: null };
+    }
+    const hash = (await wallet.writeContract({
+      address: RIVER_HOLDEM_ADDRESS,
+      abi: riverHoldemAbi,
+      functionName: "fundFees",
+      value: topUp,
+      account,
+      chain: wallet.chain,
+    })) as Hex;
+    await client.waitForTransactionReceipt({
+      hash,
+      pollingInterval: 400,
+      timeout: 60_000,
+    });
+    return { funded: true, shortfall: topUp, hash };
   }
   if (!RIVER_HOLDEM_ADDRESS) {
     throw new Error("Contract address missing.");
@@ -60,9 +92,13 @@ export async function ensureShuffleFees(incomingBuyIn = 0n): Promise<{
     throw new Error("Bot wallet is not configured on the server.");
   }
 
+  // When short, fund current shortfall + 2 extra hands
+  const fee = await readDeckFee();
+  const fundAmount = shortfall + fee * 2n;
   const botBal = await client.getBalance({ address: account.address });
   const available = botBal > GAS_RESERVE ? botBal - GAS_RESERVE : 0n;
-  if (available < shortfall) {
+  const value = fundAmount > available ? (available >= shortfall ? shortfall : 0n) : fundAmount;
+  if (value === 0n) {
     throw new Error(
       `TABLE_FEE_SHORTFALL:${formatEther(shortfall)} (house has ${formatEther(botBal)})`
     );
@@ -72,7 +108,7 @@ export async function ensureShuffleFees(incomingBuyIn = 0n): Promise<{
     address: RIVER_HOLDEM_ADDRESS,
     abi: riverHoldemAbi,
     functionName: "fundFees",
-    value: shortfall,
+    value,
     account,
     chain: wallet.chain,
   })) as Hex;
@@ -81,7 +117,7 @@ export async function ensureShuffleFees(incomingBuyIn = 0n): Promise<{
     pollingInterval: 400,
     timeout: 60_000,
   });
-  return { funded: true, shortfall, hash };
+  return { funded: true, shortfall: value, hash };
 }
 
 export function parseFeeShortfall(err: unknown): string | null {

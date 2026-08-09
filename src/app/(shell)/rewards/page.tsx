@@ -8,11 +8,14 @@ import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { usePlaySession } from "@/hooks/usePlaySession";
 import { useAuthGate } from "@/components/AuthGate";
+import { MissionsPanel } from "@/components/MissionsPanel";
+import { PlayerLevelBadge } from "@/components/PlayerLevelBadge";
+import { dailyRewardForDay } from "@/lib/progression";
+import { PremiumPageShell } from "@/components/ui/PremiumPageShell";
 
 const dailyRewards = Array.from({ length: 16 }, (_, index) => ({
   day: index + 1,
-  chips: 10000 + index * 5000,
-  xp: 120 + index * 30,
+  ...dailyRewardForDay(index + 1),
 }));
 
 function formatCooldown(lastClaim: number | null) {
@@ -45,6 +48,7 @@ export default function RewardsPage() {
     ticketsMinted,
     consumeMegapotCredit,
     markTicketMinted,
+    stats,
   } = useGame();
   const { googleUser } = useAuthGate();
   const play = usePlaySession();
@@ -54,6 +58,8 @@ export default function RewardsPage() {
 
   const nextClaimState = useMemo(() => formatCooldown(lastDailyBonusTime), [lastDailyBonusTime]);
   const canClaim = nextClaimState === "Ready now";
+
+  const [lastClaimTx, setLastClaimTx] = useState<string | null>(null);
 
   const refreshPool = useCallback(() => {
     fetch("/api/megapot/claim")
@@ -68,7 +74,7 @@ export default function RewardsPage() {
 
   async function claimMegapotTicket() {
     if (megapotCredits <= 0) {
-      setNotice("Win a hand first to earn ticket credits.");
+      setNotice("Win a hand first.");
       return;
     }
     if (!play.address) {
@@ -76,7 +82,7 @@ export default function RewardsPage() {
       return;
     }
     setClaiming(true);
-    setNotice("Minting your jackpot ticket…");
+    setNotice("Minting ticket…");
     try {
       const res = await fetch("/api/megapot/claim", {
         method: "POST",
@@ -99,11 +105,8 @@ export default function RewardsPage() {
       markTicketMinted();
       if (data.pool) setPool(data.pool);
       else refreshPool();
-      setNotice(
-        data.txHash
-          ? "Ticket claimed! Check Rewards again anytime for the pool."
-          : "Ticket claimed to your play seat."
-      );
+      if (data.txHash) setLastClaimTx(data.txHash);
+      setNotice(data.txHash ? "Ticket minted." : "Ticket claimed.");
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Claim failed.");
     } finally {
@@ -112,11 +115,11 @@ export default function RewardsPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <PremiumPageShell tone="gold">
       <SectionHeader
-        eyebrow="Win more"
+        eyebrow="Jackpot"
         title="Rewards"
-        description="Beat a hand to earn a ticket credit. Claim it here for the live jackpot."
+        description="Win hands to earn ticket credits. Claim into the live Megapot drawing."
       />
 
       {notice ? (
@@ -125,9 +128,9 @@ export default function RewardsPage() {
         </div>
       ) : null}
 
-      <div className="relative overflow-hidden rounded-[28px] border border-[#F5C518]/25 bg-gradient-to-br from-[#3a2a08] via-[#1a1528] to-[#0d0b14] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
+      <div className="relative overflow-hidden rounded-[28px] border border-[#F5C518]/25 bg-gradient-to-br from-[#3a2a08] via-[#1a1520] to-[#0d0b14] p-5 shadow-[0_20px_60px_rgba(0,0,0,0.4)]">
         <div className="pointer-events-none absolute -left-6 top-0 h-40 w-40 rounded-full bg-[#F5C518]/18 blur-3xl" />
-        <div className="pointer-events-none absolute -right-8 bottom-0 h-32 w-32 rounded-full bg-[#7B5CFF]/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-8 bottom-0 h-32 w-32 rounded-full bg-emerald-600/15 blur-3xl" />
         <div className="relative space-y-4">
           <div className="flex items-center gap-3">
             <span className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-[#F5C518]/30 bg-[#F5C518]/12 text-[#F5C518] shadow-[0_0_24px_rgba(245,197,24,0.2)]">
@@ -166,9 +169,16 @@ export default function RewardsPage() {
           >
             {claiming ? "Claiming…" : "Claim jackpot ticket"}
           </GradientButton>
-          <p className="text-[11px] text-[#9AA0B4]">
-            Win at the table to earn credits. Fun chips from daily streak unlock Shop looks.
-          </p>
+          {lastClaimTx ? (
+            <a
+              href={`https://sepolia.basescan.org/tx/${lastClaimTx}`}
+              target="_blank"
+              rel="noreferrer"
+              className="block text-center text-[11px] font-bold text-[#F5C518] hover:underline"
+            >
+              View mint tx
+            </a>
+          ) : null}
         </div>
       </div>
 
@@ -177,6 +187,8 @@ export default function RewardsPage() {
         title="Free chips every day"
         description="Claim once every 24 hours. Each claim also gives +1 jackpot ticket credit."
       />
+
+      <PlayerLevelBadge xp={xp} wins={stats.gamesWon} className="mb-2" />
 
       <div className="grid gap-4 md:grid-cols-3">
         <GlassCard accent="gold">
@@ -251,6 +263,21 @@ export default function RewardsPage() {
           );
         })}
       </div>
-    </div>
+
+      <section className="relative overflow-hidden rounded-[28px] border border-white/10 bg-gradient-to-b from-[#1c1a24] via-[#14121c] to-[#0f0d18] p-5 shadow-[0_20px_50px_rgba(0,0,0,0.35)] sm:p-6">
+        <div className="relative mb-4 flex items-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-[#F5C518]/25 bg-[#F5C518]/10 text-[#F5C518]">
+            <TrophyIcon className="h-6 w-6" />
+          </span>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#9AA0B4]">
+              Optional missions
+            </p>
+            <h2 className="text-lg font-black text-white">Extra chips & XP</h2>
+          </div>
+        </div>
+        <MissionsPanel />
+      </section>
+    </PremiumPageShell>
   );
 }

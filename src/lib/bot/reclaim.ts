@@ -44,10 +44,15 @@ type TableRow = readonly [
  * Pull River Bot stacks out of abandoned / settled tables so Quick Play
  * doesn't go offline every time chips are stuck on-chain.
  */
-export async function botReclaimFunds(opts?: { maxTables?: number }) {
+export async function botReclaimFunds(opts?: {
+  maxTables?: number;
+  /** Never cash the bot out of these tables (keep seat for next deal). */
+  excludeTableIds?: Array<bigint | string>;
+}) {
   const account = getBotAccount();
   const wallet = getBotWalletClient();
   const publicClient = getBotPublicClient();
+  const exclude = new Set((opts?.excludeTableIds ?? []).map((id) => String(id)));
   if (!account || !wallet) {
     return {
       reclaimed: 0n,
@@ -83,6 +88,12 @@ export async function botReclaimFunds(opts?: { maxTables?: number }) {
           const seat =
             row[0].toLowerCase() === bot ? 0 : row[1].toLowerCase() === bot ? 1 : -1;
           if (seat < 0) continue;
+
+          // Keep bot seated on the table we're about to deal next
+          if (exclude.has(id.toString()) && contract === RIVER_HOLDEM_ADDRESS) {
+            actions.push(`keep#${id}`);
+            continue;
+          }
 
           const gas = await publicClient.getBalance({ address: account.address });
           if (gas < 8n * 10n ** 13n) {

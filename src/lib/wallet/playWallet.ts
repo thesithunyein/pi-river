@@ -20,10 +20,10 @@ import {
 } from "@/lib/contracts/riverHoldem";
 
 const STORAGE_KEY = "pi_river_play_wallets_v1";
-/** Minimum to open a table: buy-in + light gas (shuffle fee topped up separately). */
-export const PLAY_MIN = 15n * 10n ** 12n + 6n * 10n ** 12n; // ~0.000021
-/** Prefer a bit of headroom when house can afford it. */
-const PLAY_TARGET = 28n * 10n ** 12n; // ~0.000028
+/** Minimum to open a table with headroom for a few gas txs. */
+export const PLAY_MIN = 220n * 10n ** 12n; // ~0.00022
+/** Target drip — multi-hand grind without immediate refill. */
+const PLAY_TARGET = 450n * 10n ** 12n; // ~0.00045
 
 type PlayWalletStore = Record<string, Hex>;
 
@@ -207,11 +207,15 @@ export async function reclaimPlayWalletStacks(googleUserId: string) {
   return reclaimed;
 }
 
-export async function ensurePlayWalletFunded(googleUserId: string) {
+export async function ensurePlayWalletFunded(
+  googleUserId: string,
+  minBalance: bigint = PLAY_MIN
+) {
   const address = getPlayAddress(googleUserId);
   const publicClient = getPlayPublicClient();
+  const target = minBalance > PLAY_TARGET ? minBalance : PLAY_TARGET;
   let balance = await publicClient.getBalance({ address });
-  if (balance >= PLAY_MIN) {
+  if (balance >= minBalance) {
     return { ok: true, funded: true, balanceEth: formatEther(balance), drippedEth: "0" };
   }
 
@@ -222,7 +226,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
     // continue to drip
   }
   balance = await publicClient.getBalance({ address });
-  if (balance >= PLAY_MIN) {
+  if (balance >= minBalance) {
     return {
       ok: true,
       funded: true,
@@ -235,7 +239,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
   const res = await fetch("/api/play/drip", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ address, googleUserId, targetEth: formatEther(PLAY_TARGET) }),
+    body: JSON.stringify({ address, googleUserId, targetEth: formatEther(target) }),
   });
   const data = (await res.json()) as {
     ok?: boolean;
@@ -246,7 +250,7 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
   };
 
   balance = await publicClient.getBalance({ address });
-  if (balance >= PLAY_MIN) {
+  if (balance >= minBalance) {
     return {
       ok: true,
       funded: true,
@@ -258,7 +262,6 @@ export async function ensurePlayWalletFunded(googleUserId: string) {
   if (!res.ok) {
     throw new Error(data.error || "Could not set up your seat. Try again.");
   }
-  throw new Error(
-    data.error || "Seat faucet is low. Tap Play again in a moment after the house refills."
-  );
+
+  throw new Error(data.error || "Seat still warming up. Tap again.");
 }

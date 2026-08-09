@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   BoltIcon,
   CardsIcon,
@@ -17,9 +17,17 @@ import { useAuthGate } from "@/components/AuthGate";
 import { CuteAvatar } from "@/components/CuteAvatar";
 import { PlayerAvatar, usePlayerAvatarSrc } from "@/components/PlayerAvatar";
 import { AVATAR_OPTIONS, useGame } from "@/context/GameContext";
+import { PlayerLevelBadge } from "@/components/PlayerLevelBadge";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { cn } from "@/lib/cn";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
+import { PremiumPageShell } from "@/components/ui/PremiumPageShell";
+import { getPlayerLevel, XP_PER_LEVEL } from "@/lib/progression";
+import { buildClubLadder, formatMatchChips, mergeLiveLadder, type LadderEntry } from "@/lib/clubLadder";
+import { formatRelativeTime } from "@/lib/time";
+import { useLadderPresence } from "@/hooks/useLadderPresence";
+import { getPlayAddress } from "@/lib/wallet/playWallet";
 import { useAccount, useDisconnect } from "wagmi";
 
 export default function ProfilePage() {
@@ -35,17 +43,107 @@ export default function ProfilePage() {
     matchHistory,
     profile,
     soundEnabled,
+    musicEnabled,
+    ticketsMinted,
+    cloudNotice,
+    onchainChips,
     setSoundEnabled,
+    setMusicEnabled,
     updateProfile,
     resetProgress,
   } = useGame();
 
   const [draft, setDraft] = useState(profile);
+  const [now, setNow] = useState(() => Date.now());
+  const [ladder, setLadder] = useState<LadderEntry[]>([]);
+  const [ladderLive, setLadderLive] = useState(false);
+  const [ladderSource, setLadderSource] = useState<"chain" | "table" | "presence" | "empty">("empty");
+  const ladderSourceRef = useRef(ladderSource);
+  ladderSourceRef.current = ladderSource;
+  const presenceActiveRef = useRef(false);
   const liveAvatarSrc = usePlayerAvatarSrc();
+
+  // Presence is secondary — only fill if chain/SQL empty
+  useLadderPresence((peers) => {
+    if (!peers.length) return;
+    if (ladderSourceRef.current === "chain" || ladderSourceRef.current === "table") return;
+    presenceActiveRef.current = true;
+    const you = {
+      displayName: profile.displayName || "You",
+      wins: stats.gamesWon,
+      tickets: ticketsMinted,
+      totalEarnings: stats.totalEarnings,
+    };
+    setLadder(mergeLiveLadder(peers, you));
+    setLadderLive(true);
+    setLadderSource("presence");
+  }, Boolean(googleUser));
 
   useEffect(() => {
     setDraft(profile);
   }, [profile]);
+
+  useEffect(() => {
+    if (cloudNotice) {
+      setNotice(cloudNotice);
+      window.setTimeout(() => setNotice(null), 3200);
+    }
+  }, [cloudNotice]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const you = {
+      displayName: profile.displayName || "You",
+      wins: stats.gamesWon,
+      tickets: ticketsMinted,
+      totalEarnings: stats.totalEarnings,
+    };
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/leaderboard");
+        const data = (await res.json()) as {
+          ok?: boolean;
+          entries?: LadderEntry[];
+          source?: string;
+        };
+        if (cancelled) return;
+        let entries = Array.isArray(data.entries) ? data.entries : [];
+        if (googleUser?.id && entries.length) {
+          try {
+            const play = getPlayAddress(googleUser.id).toLowerCase();
+            entries = entries.map((e) =>
+              e.id.toLowerCase() === play ? { ...e, isYou: true, name: you.displayName } : e
+            );
+          } catch {
+            // ignore
+          }
+        }
+        if (data.ok && entries.length) {
+          setLadder(mergeLiveLadder(entries, you));
+          setLadderLive(true);
+          setLadderSource(data.source === "chain" ? "chain" : "table");
+          return;
+        }
+        // Keep presence board if already live; else just you
+        if (presenceActiveRef.current) return;
+      } catch {
+        // fall through
+      }
+      if (!cancelled && !presenceActiveRef.current) {
+        setLadder(buildClubLadder(you));
+        setLadderLive(false);
+        setLadderSource("empty");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [profile.displayName, stats.gamesWon, stats.totalEarnings, ticketsMinted, googleUser?.id]);
 
   useEffect(() => {
     if (!googleUser) return;
@@ -120,20 +218,15 @@ export default function ProfilePage() {
       icon: CoinIcon,
       tone: "text-[#F5C518]",
     },
-    {
-      label: "Streak",
-      value: `${stats.currentStreak}`,
-      icon: BoltIcon,
-      tone: "text-[#B9A8FF]",
-    },
+    { label: "Streak", value: `${stats.currentStreak}`, icon: BoltIcon, tone: "text-[#F5C518]" },
   ];
 
   return (
-    <div className="space-y-6">
+    <PremiumPageShell tone="gold">
       <SectionHeader
-        eyebrow="Player card"
-        title="Your seat at the table"
-        description="Identity, progression, and session settings."
+        eyebrow="Your seat"
+        title="Player card"
+        description="Photo, level, and career stats — your identity at the table."
       />
 
       {notice ? (
@@ -142,11 +235,11 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
-      <GlassCard accent="purple" className="space-y-5">
+      <GlassCard accent="gold" className="space-y-5">
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
             <div className="relative">
-              <PlayerAvatar className="rounded-[26px]" size={80} showRing />
+              <PlayerAvatar size={80} showRing />
               <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#161322] bg-[#F5C518] text-[#1A1400]">
                 <SpadeIcon className="h-4 w-4" />
               </span>
@@ -156,13 +249,16 @@ export default function ProfilePage() {
                 {vipTier} tier
               </p>
               <h2 className="text-2xl font-black text-white">{profile.displayName}</h2>
+              <div className="pt-1">
+                <PlayerLevelBadge xp={xp} wins={stats.gamesWon} compact />
+              </div>
               <p className="text-sm text-[#9AA0B4]">{profile.bio}</p>
-              <p className="text-[11px] font-semibold text-[#7d8398]">
+              <p className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-semibold text-[#9AA0B4]">
                 {liveAvatarSrc
                   ? googleUser && !profile.avatarUrl
                     ? "Photo from Google"
                     : "Custom profile photo"
-                  : `Style: ${avatar.name}`}
+                  : `Cute avatar · ${avatar.name}`}
               </p>
             </div>
           </div>
@@ -176,9 +272,14 @@ export default function ProfilePage() {
               <p className="font-mono text-lg font-black tabular-nums text-white">
                 {chips.toLocaleString()}
               </p>
+              {onchainChips != null ? (
+                <p className="mt-1 text-[10px] font-semibold text-[#9AA0B4]">
+                  On-chain {onchainChips.toLocaleString()} rCHIP
+                </p>
+              ) : null}
             </div>
             <div className="rounded-2xl border border-white/10 bg-black/20 px-3 py-3">
-              <div className="mb-1 flex items-center gap-1.5 text-[#B9A8FF]">
+              <div className="mb-1 flex items-center gap-1.5 text-[#F5C518]">
                 <DiamondIcon className="h-4 w-4" />
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">XP</span>
               </div>
@@ -308,18 +409,19 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="grid gap-2 grid-cols-2 sm:grid-cols-3">
+          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
             {AVATAR_OPTIONS.map((option) => {
               const active = option.id === draft.avatarId && draft.usePresetAvatar;
               return (
                 <button
                   key={option.id}
                   type="button"
-                  className={`rounded-2xl border p-3 text-left transition ${
+                  className={cn(
+                    "group relative overflow-hidden rounded-[22px] border p-3 text-left transition soft-card-hover",
                     active
-                      ? "border-[#F5C518]/40 bg-[#F5C518]/10"
-                      : "border-white/8 bg-[#12101c] hover:border-white/20"
-                  }`}
+                      ? "border-[#F5C518]/50 bg-gradient-to-b from-[#3a2d0a]/90 to-[#161322] shadow-[0_12px_36px_rgba(245,197,24,0.2)]"
+                      : "border-white/10 bg-gradient-to-b from-[#1a1730] to-[#100e1a] hover:border-white/25"
+                  )}
                   onClick={() =>
                     setDraft((current) => ({
                       ...current,
@@ -329,11 +431,16 @@ export default function ProfilePage() {
                     }))
                   }
                 >
-                  <div className="mb-2">
-                    <CuteAvatar id={option.id} size={44} className="rounded-xl" />
+                  <div className="mb-3 flex items-center gap-3">
+                    <CuteAvatar id={option.id} size={56} className="rounded-2xl" showRing={active} />
+                    {active ? (
+                      <span className="rounded-full bg-[#F5C518]/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#F5C518]">
+                        Active
+                      </span>
+                    ) : null}
                   </div>
-                  <p className="text-xs font-bold text-white">{option.name}</p>
-                  <p className="mt-0.5 text-[10px] leading-snug text-[#9AA0B4]">{option.description}</p>
+                  <p className="text-sm font-black text-white">{option.name}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-[#9AA0B4]">{option.description}</p>
                 </button>
               );
             })}
@@ -402,17 +509,19 @@ export default function ProfilePage() {
                 <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9AA0B4]">
                   Level
                 </p>
-                <p className="text-sm font-bold text-white">{vipTier} progression</p>
+                <p className="text-sm font-bold text-white">
+                  Lv.{getPlayerLevel(xp, stats.gamesWon)} · {vipTier}
+                </p>
               </div>
             </div>
             <div className="h-3 overflow-hidden rounded-full bg-black/30">
               <div
                 className="h-full rounded-full bg-gradient-to-r from-[#F5C518] to-[#E29A12]"
-                style={{ width: `${Math.min(100, (xp / 12000) * 100)}%` }}
+                style={{ width: `${Math.min(100, (xp % XP_PER_LEVEL) / XP_PER_LEVEL * 100)}%` }}
               />
             </div>
             <p className="font-mono text-xs tabular-nums text-[#9AA0B4]">
-              {xp.toLocaleString()} / 12,000 XP
+              {xp % XP_PER_LEVEL} / {XP_PER_LEVEL} XP this level · {xp.toLocaleString()} total
             </p>
           </GlassCard>
 
@@ -440,19 +549,38 @@ export default function ProfilePage() {
           </GlassCard>
 
           <GlassCard className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-[#9AA0B4]">
-                  <SettingsIcon className="h-5 w-5" />
-                </span>
-                <div>
-                  <p className="text-sm font-bold text-white">Audio</p>
-                  <p className="text-xs text-[#9AA0B4]">Table click and chip sounds</p>
-                </div>
+            <div className="flex items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-[#9AA0B4]">
+                <SettingsIcon className="h-5 w-5" />
+              </span>
+              <div>
+                <p className="text-sm font-bold text-white">Audio</p>
+                <p className="text-xs text-[#9AA0B4]">
+                  SFX for chips &amp; cards · lounge music bed (quieter on phone)
+                </p>
               </div>
-              <GradientButton variant="secondary" onClick={() => setSoundEnabled(!soundEnabled)}>
-                {soundEnabled ? "On" : "Off"}
-              </GradientButton>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/8 bg-black/25 px-3 py-2.5">
+                <span className="text-xs font-bold text-white">Table SFX</span>
+                <GradientButton
+                  variant="secondary"
+                  className="min-h-9 px-3 text-xs"
+                  onClick={() => setSoundEnabled(!soundEnabled)}
+                >
+                  {soundEnabled ? "On" : "Off"}
+                </GradientButton>
+              </div>
+              <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/8 bg-black/25 px-3 py-2.5">
+                <span className="text-xs font-bold text-white">Lounge music</span>
+                <GradientButton
+                  variant="secondary"
+                  className="min-h-9 px-3 text-xs"
+                  onClick={() => setMusicEnabled(!musicEnabled)}
+                >
+                  {musicEnabled ? "On" : "Off"}
+                </GradientButton>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-2">
@@ -489,42 +617,165 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      <GlassCard className="space-y-4">
+      <GlassCard className="space-y-4 overflow-hidden border-[#F5C518]/20 bg-gradient-to-b from-[#2a2210] via-[#161322] to-[#0f0d18]">
+        <div className="relative flex items-center gap-3">
+          <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F5C518]/35 bg-[#F5C518]/15 text-[#F5C518] shadow-[0_0_24px_rgba(245,197,24,0.25)]">
+            <TrophyIcon className="h-6 w-6" />
+          </span>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#F5C518]">
+              {ladderLive ? "Live club ladder" : "Club ladder"}
+            </p>
+            <h3 className="text-lg font-black text-white">
+              {ladderSource === "chain"
+                ? "On-chain rankings"
+                : ladderSource === "table"
+                  ? "Cloud rankings"
+                  : ladderSource === "presence"
+                    ? "Players online now"
+                    : "Your rank"}
+            </h3>
+            <p className="mt-0.5 text-[12px] text-[#9AA0B4]">
+              {ladderSource === "chain"
+                ? "Real scores on Base Sepolia (RiverClub). No house fillers."
+                : ladderSource === "table"
+                  ? "Synced from cloud progress."
+                  : ladderSource === "presence"
+                    ? "Live presence while friends are signed in."
+                    : "Play a hand — your score posts on-chain after sync."}
+            </p>
+          </div>
+        </div>
+        <div className="space-y-2">
+          {ladder.map((entry, index) => (
+            <div
+              key={entry.id}
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border px-3 py-2.5",
+                entry.isYou
+                  ? "border-[#F5C518]/40 bg-gradient-to-r from-[#F5C518]/15 to-transparent shadow-[0_0_24px_rgba(245,197,24,0.12)]"
+                  : "border-white/8 bg-black/25",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black",
+                  index === 0
+                    ? "bg-gradient-to-b from-[#F5C518] to-[#E29A12] text-[#1A1400]"
+                    : index === 1
+                      ? "bg-[#c0c7d4] text-[#1a1f2e]"
+                      : index === 2
+                        ? "bg-[#d4a574] text-[#2a1a0a]"
+                        : "bg-white/10 text-white",
+                )}
+              >
+                {index + 1}
+              </span>
+              {entry.isYou ? (
+                <PlayerAvatar size={40} showRing />
+              ) : entry.avatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={entry.avatarUrl}
+                  alt=""
+                  width={40}
+                  height={40}
+                  className="h-10 w-10 rounded-full object-cover"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <CuteAvatar id={entry.avatarId ?? "felt-core"} size={40} className="rounded-full" />
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-black text-white">
+                  {entry.name}
+                  {entry.isYou ? (
+                    <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-[#F5C518]">
+                      You
+                    </span>
+                  ) : entry.isHouse ? (
+                    <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">
+                      House
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-[11px] font-semibold text-[#9AA0B4]">
+                  {entry.wins} wins · {entry.tickets} tickets
+                </p>
+              </div>
+              <p className="font-mono text-sm font-black tabular-nums text-[#F5C518]">
+                {entry.score.toLocaleString()}
+              </p>
+            </div>
+          ))}
+        </div>
+      </GlassCard>
+
+      <GlassCard accent="gold" className="space-y-4">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 text-[#86efac]">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#F5C518]/30 bg-[#F5C518]/15 text-[#F5C518]">
             <CardsIcon className="h-5 w-5" />
           </span>
           <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#F5C518]">
-              Recent hands
+            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#F5C518]">
+              Hand log
             </p>
-            <h3 className="text-lg font-black text-white">Match history</h3>
+            <h3 className="text-lg font-black text-white">Your recent runs</h3>
+            <p className="text-[11px] text-[#9AA0B4]">
+              Real settled hands from this account — syncs on Google login.
+            </p>
           </div>
         </div>
         {matchHistory.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-[#12101c] p-6 text-sm text-[#9AA0B4]">
-            No hands yet. Sit at a table and results will land here.
+          <div className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-6 text-sm text-[#9AA0B4]">
+            No hands yet. Sit at a table — wins climb the ladder; folds just close that pot.
           </div>
         ) : (
           <div className="space-y-2">
             {matchHistory.map((match, index) => (
               <div
-                key={`${match.opponent}-${index}`}
-                className="flex items-center justify-between gap-4 rounded-2xl border border-white/8 bg-[#12101c] p-4"
+                key={`${match.at}-${match.opponent}-${index}`}
+                className={cn(
+                  "flex items-center gap-3 rounded-2xl border px-3 py-2.5",
+                  match.result === "win"
+                    ? "border-emerald-400/25 bg-emerald-500/10"
+                    : "border-white/8 bg-black/30",
+                )}
               >
-                <div>
-                  <p className="text-sm font-bold text-white">vs {match.opponent}</p>
-                  <p className="text-xs text-[#9AA0B4]">{match.hand}</p>
+                <span
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-black uppercase tracking-wider",
+                    match.result === "win"
+                      ? "bg-emerald-400/20 text-emerald-300"
+                      : "bg-white/10 text-[#9AA0B4]",
+                  )}
+                >
+                  {match.result === "win" ? "W" : "L"}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-black text-white">vs {match.opponent}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">
+                    {match.hand}
+                  </p>
                 </div>
                 <div className="text-right">
-                  <p className="font-mono text-sm font-bold tabular-nums text-white">{match.chips}</p>
-                  <p className="text-xs text-[#9AA0B4]">{match.time}</p>
+                  <p
+                    className={cn(
+                      "font-mono text-sm font-black tabular-nums",
+                      match.result === "win" ? "text-emerald-300" : "text-[#9AA0B4]",
+                    )}
+                  >
+                    {formatMatchChips(match.chipsDelta, match.result, match.hand)}
+                  </p>
+                  <p className="text-[10px] font-semibold text-[#6b728a]">
+                    {formatRelativeTime(match.at, now)}
+                  </p>
                 </div>
               </div>
             ))}
           </div>
         )}
       </GlassCard>
-    </div>
+    </PremiumPageShell>
   );
 }

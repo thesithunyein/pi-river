@@ -32,9 +32,39 @@ export function createClient() {
           data: { subscription: { unsubscribe: () => undefined } },
         }),
       },
+      ...emptyRealtimeStub(),
     } as any;
   }
 
   return createBrowserClient(url!, key);
+}
+
+/** No-op Realtime surface when env keys are missing. */
+function emptyRealtimeStub() {
+  const channel = {
+    on() {
+      return channel;
+    },
+    subscribe(cb?: (status: string) => void) {
+      cb?.("SUBSCRIBED");
+      return channel;
+    },
+    async track() {
+      return "ok";
+    },
+    async untrack() {
+      return "ok";
+    },
+    async send() {
+      return "ok";
+    },
+    presenceState() {
+      return {};
+    },
+  };
+  return {
+    channel: () => channel,
+    removeChannel: () => undefined,
+  };
 }
 

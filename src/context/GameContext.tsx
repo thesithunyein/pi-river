@@ -4,6 +4,16 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { sound } from "@/lib/sound";
 import { createClient } from "@/lib/supabase/client";
 import { readLinkedIdentity } from "@/lib/identity";
+import { MISSIONS, getPlayerLevel } from "@/lib/missions";
+import { dailyRewardForDay, STARTING_CHIPS, vipTierForLevel, xpFromHand } from "@/lib/progression";
+import {
+  applyVeteranChipCap,
+  ECONOMY_VERSION,
+  type ProgressPayload,
+} from "@/lib/progressSync";
+import { readFriends, writeFriends } from "@/lib/friends";
+import { getPlayAddress } from "@/lib/wallet/playWallet";
+import { burnSelfRiverChips } from "@/lib/economy/burnSelf";
 
 export interface UserProfile {
   displayName: string;
@@ -33,7 +43,7 @@ export const AVATAR_OPTIONS: AvatarOption[] = [
     emoji: "🦊",
     bgGradient: "from-cyan-400 to-orange-500",
     borderColor: "border-cyan-300",
-    description: "Speedy fox who loves early pots",
+    description: "Speedy fox — opens pots early",
   },
   {
     id: "gold-stack",
@@ -41,7 +51,7 @@ export const AVATAR_OPTIONS: AvatarOption[] = [
     emoji: "🪙",
     bgGradient: "from-amber-300 to-yellow-600",
     borderColor: "border-yellow-300",
-    description: "Chip-crowned value hunter",
+    description: "Chip crown. Stacks big pots",
   },
   {
     id: "night-bluff",
@@ -49,7 +59,7 @@ export const AVATAR_OPTIONS: AvatarOption[] = [
     emoji: "🥷",
     bgGradient: "from-indigo-500 to-violet-900",
     borderColor: "border-indigo-300",
-    description: "Hooded midnight bluffer",
+    description: "Hooded pressure specialist",
   },
   {
     id: "felt-core",
@@ -57,15 +67,15 @@ export const AVATAR_OPTIONS: AvatarOption[] = [
     emoji: "🐼",
     bgGradient: "from-emerald-400 to-teal-800",
     borderColor: "border-emerald-300",
-    description: "Calm green-table panda",
+    description: "Calm panda. Wait for nuts",
   },
   {
     id: "violet-read",
-    name: "Violet Read",
+    name: "Rail Owl",
     emoji: "🦉",
-    bgGradient: "from-purple-400 to-violet-900",
-    borderColor: "border-purple-300",
-    description: "Big-eyed read specialist",
+    bgGradient: "from-slate-400 to-slate-900",
+    borderColor: "border-slate-300",
+    description: "Owl eyes. Spots every tell",
   },
   {
     id: "river-ace",
@@ -73,7 +83,7 @@ export const AVATAR_OPTIONS: AvatarOption[] = [
     emoji: "🦈",
     bgGradient: "from-rose-400 to-red-800",
     borderColor: "border-rose-300",
-    description: "Ace-finishing river shark",
+    description: "Shark fin. Closes on river",
   },
 ];
 
@@ -81,8 +91,10 @@ export interface MatchRecord {
   opponent: string;
   result: "win" | "loss";
   hand: string;
-  chips: string;
-  time: string;
+  /** Signed fun-chip delta (0 on fold / soft losses). */
+  chipsDelta: number;
+  /** Unix ms when the hand settled. */
+  at: number;
 }
 
 export interface PlayerStats {
@@ -106,14 +118,24 @@ interface GameContextType {
   stats: PlayerStats;
   matchHistory: MatchRecord[];
   soundEnabled: boolean;
+  musicEnabled: boolean;
   profile: UserProfile;
   chainId: number;
   /** Unclaimed Megapot ticket credits earned from sealed river play */
   megapotCredits: number;
   ticketsMinted: number;
   sessionStake: number;
+  /** Mission progress counts keyed by mission id */
+  missionProgress: Record<string, number>;
+  /** Claimed mission ids */
+  missionsClaimed: string[];
+  /** One-shot sync / economy notices */
+  cloudNotice: string | null;
+  /** On-chain rCHIP balance (mirrors fun chips via house mint/burn) */
+  onchainChips: number | null;
   updateProfile: (newProfile: Partial<UserProfile>) => void;
   setSoundEnabled: (enabled: boolean) => void;
+  setMusicEnabled: (enabled: boolean) => void;
   addChips: (amount: number) => void;
   deductChips: (amount: number) => boolean;
   equipCardBack: (id: string) => void;
@@ -126,6 +148,8 @@ interface GameContextType {
   awardMegapotWin: (opts?: { showdown?: boolean }) => number;
   consumeMegapotCredit: () => boolean;
   markTicketMinted: () => void;
+  bumpMission: (id: string, by?: number) => void;
+  claimMission: (id: string) => boolean;
   resetProgress: () => void;
 }
 
@@ -155,11 +179,8 @@ const LEGACY_STORAGE_KEY = "pi_river_player_state_v1";
 const STORAGE_PREFIX = "pi_river_player_state_v2:";
 const DAILY_REWARD_COOLDOWN = 24 * 60 * 60 * 1000;
 
-function getTierForXp(totalXp: number) {
-  if (totalXp >= 12000) return "Diamond";
-  if (totalXp >= 7000) return "Gold";
-  if (totalXp >= 3000) return "Silver";
-  return "Bronze";
+function getTierForXp(totalXp: number, wins = 0) {
+  return vipTierForLevel(getPlayerLevel(totalXp, wins));
 }
 
 function accountStorageKey(accountKey: string) {
@@ -168,7 +189,7 @@ function accountStorageKey(accountKey: string) {
 
 function emptySave() {
   return {
-    chips: 50000,
+    chips: STARTING_CHIPS,
     xp: 0,
     vipTier: getTierForXp(0),
     equippedCardBack: "classic",
@@ -180,10 +201,53 @@ function emptySave() {
     stats: { ...INITIAL_STATS },
     matchHistory: [] as MatchRecord[],
     soundEnabled: true,
+    musicEnabled: true,
+    economyVersion: ECONOMY_VERSION,
     profile: { ...INITIAL_PROFILE },
     megapotCredits: 0,
     ticketsMinted: 0,
+    missionProgress: {} as Record<string, number>,
+    missionsClaimed: [] as string[],
   };
+}
+
+/** Migrate legacy string chips/time rows into structured MatchRecord. */
+function normalizeMatchHistory(raw: unknown): MatchRecord[] {
+  if (!Array.isArray(raw)) return [];
+  const now = Date.now();
+  const seen = new Set<string>();
+  const out: MatchRecord[] = [];
+  for (let i = 0; i < raw.length; i++) {
+    const row = raw[i];
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const opponent = typeof r.opponent === "string" ? r.opponent : "Opponent";
+    const result = r.result === "win" ? "win" : "loss";
+    const hand = typeof r.hand === "string" ? r.hand : "Hand";
+    let chipsDelta = 0;
+    if (typeof r.chipsDelta === "number" && Number.isFinite(r.chipsDelta)) {
+      chipsDelta = Math.trunc(r.chipsDelta);
+    } else if (typeof r.chips === "string") {
+      const parsed = Number(String(r.chips).replace(/[^0-9.-]/g, ""));
+      chipsDelta = Number.isFinite(parsed) ? Math.trunc(parsed) : 0;
+    } else if (typeof r.chips === "number" && Number.isFinite(r.chips)) {
+      chipsDelta = Math.trunc(r.chips);
+    }
+    let at = typeof r.at === "number" && r.at > 0 ? r.at : 0;
+    if (!at) {
+      at = now - (i + 1) * 60_000;
+    }
+    const key = `${at}|${opponent}|${hand}|${result}|${chipsDelta}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ opponent, result, hand, chipsDelta, at });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
+
+function mergeMatchHistory(local: MatchRecord[], remote: MatchRecord[]): MatchRecord[] {
+  return normalizeMatchHistory([...remote, ...local]).sort((a, b) => b.at - a.at).slice(0, 20);
 }
 
 function readSave(accountKey: string) {
@@ -206,7 +270,7 @@ function readSave(accountKey: string) {
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [accountKey, setAccountKey] = useState<string>("guest");
-  const [chips, setChips] = useState<number>(50000);
+  const [chips, setChips] = useState<number>(STARTING_CHIPS);
   const [xp, setXp] = useState<number>(0);
   const [vipTier, setVipTier] = useState<string>(getTierForXp(0));
   const [equippedCardBack, setEquippedCardBack] = useState<string>("classic");
@@ -218,14 +282,24 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const [stats, setStats] = useState<PlayerStats>(INITIAL_STATS);
   const [matchHistory, setMatchHistory] = useState<MatchRecord[]>(INITIAL_MATCHES);
   const [soundEnabled, setSoundEnabledState] = useState<boolean>(true);
+  const [musicEnabled, setMusicEnabledState] = useState<boolean>(true);
   const [profile, setProfile] = useState<UserProfile>(INITIAL_PROFILE);
   const [chainId] = useState<number>(84532);
   const [megapotCredits, setMegapotCredits] = useState(0);
   const [ticketsMinted, setTicketsMinted] = useState(0);
   const [sessionStake, setSessionStake] = useState(1);
+  const [missionProgress, setMissionProgress] = useState<Record<string, number>>({});
+  const [missionsClaimed, setMissionsClaimed] = useState<string[]>([]);
+  const [economyVersion, setEconomyVersion] = useState(ECONOMY_VERSION);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [cloudNotice, setCloudNotice] = useState<string | null>(null);
+  const [onchainChips, setOnchainChips] = useState<number | null>(null);
   const accountRef = useRef(accountKey);
   accountRef.current = accountKey;
+  const syncTimer = useRef<number | null>(null);
+  const economyTimer = useRef<number | null>(null);
+  const skipNextCloudPush = useRef(false);
+  const lastEconomyNotice = useRef(0);
 
   // Resolve Google / wallet account so shop + stats stick per real user
   useEffect(() => {
@@ -268,7 +342,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   // Load this account's save whenever accountKey changes
   useEffect(() => {
     const save = readSave(accountKey);
-    setChips(typeof save.chips === "number" ? save.chips : 50000);
+    const rawChips = typeof save.chips === "number" ? save.chips : STARTING_CHIPS;
+    const priorVersion = typeof (save as { economyVersion?: number }).economyVersion === "number"
+      ? (save as { economyVersion: number }).economyVersion
+      : 0;
+    const { chips: cappedChips, capped } = applyVeteranChipCap(rawChips, priorVersion);
+    setChips(cappedChips);
+    setEconomyVersion(ECONOMY_VERSION);
+    if (capped) {
+      setCloudNotice("Stack balanced for the new economy — cosmetics kept.");
+      window.setTimeout(() => setCloudNotice(null), 4000);
+    }
     setXp(typeof save.xp === "number" ? save.xp : 0);
     setVipTier(save.vipTier || getTierForXp(save.xp || 0));
     setEquippedCardBack(save.equippedCardBack || "classic");
@@ -286,9 +370,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setLastDailyBonusTime(save.lastDailyBonusTime ?? null);
     setRewardTrackDay(save.rewardTrackDay || 1);
     setStats(save.stats ? { ...INITIAL_STATS, ...save.stats } : INITIAL_STATS);
-    setMatchHistory(Array.isArray(save.matchHistory) ? save.matchHistory : []);
+    setMatchHistory(normalizeMatchHistory(save.matchHistory));
     setSoundEnabledState(save.soundEnabled !== false);
-    sound.enabled = save.soundEnabled !== false;
+    sound.sfxEnabled = save.soundEnabled !== false;
+    const musicOn = (save as { musicEnabled?: boolean }).musicEnabled !== false;
+    setMusicEnabledState(musicOn);
+    sound.musicEnabled = musicOn;
+    if (musicOn) sound.bindUnlockOnce();
+    else sound.stopMusic();
     setProfile({
       ...INITIAL_PROFILE,
       ...(save.profile || {}),
@@ -297,7 +386,78 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     });
     setMegapotCredits(typeof save.megapotCredits === "number" ? save.megapotCredits : 0);
     setTicketsMinted(typeof save.ticketsMinted === "number" ? save.ticketsMinted : 0);
+    setMissionProgress(
+      save.missionProgress && typeof save.missionProgress === "object" ? save.missionProgress : {}
+    );
+    setMissionsClaimed(Array.isArray(save.missionsClaimed) ? save.missionsClaimed : []);
     setIsLoaded(true);
+
+    // Pull cloud progress for Google accounts (survives device switch)
+    if (!accountKey.startsWith("google:")) return;
+    let cancelled = false;
+    skipNextCloudPush.current = true;
+    void (async () => {
+      try {
+        const res = await fetch("/api/progress");
+        const data = (await res.json()) as {
+          ok?: boolean;
+          progress?: ProgressPayload | null;
+          needsMigration?: boolean;
+          source?: string;
+        };
+        if (cancelled || !data.ok || !data.progress) {
+          if (data.needsMigration && !data.progress) {
+            // Auth metadata sync still works on first save; table is optional for durable ladder
+          }
+          return;
+        }
+        const remote = data.progress;
+        if (remote.friends?.length) writeFriends(remote.friends);
+        const { chips: remoteChips } = applyVeteranChipCap(remote.chips, remote.economyVersion);
+        setChips(remoteChips);
+        setXp(remote.xp);
+        setVipTier(remote.vipTier || getTierForXp(remote.xp, remote.stats?.gamesWon));
+        setEquippedCardBack(remote.equippedCardBack || "classic");
+        setEquippedTableFelt(remote.equippedTableFelt || "green");
+        setOwnedCardBacks(remote.ownedCardBacks?.length ? remote.ownedCardBacks : ["classic"]);
+        setOwnedTableFelts(remote.ownedTableFelts?.length ? remote.ownedTableFelts : ["green"]);
+        setLastDailyBonusTime(remote.lastDailyBonusTime);
+        setRewardTrackDay(remote.rewardTrackDay || 1);
+        setStats({ ...INITIAL_STATS, ...remote.stats });
+        // Merge so empty cloud mh never wipes real local hands; login/logout keeps log
+        setMatchHistory((prev) =>
+          mergeMatchHistory(prev, normalizeMatchHistory(remote.matchHistory))
+        );
+        setSoundEnabledState(remote.soundEnabled !== false);
+        sound.sfxEnabled = remote.soundEnabled !== false;
+        setMusicEnabledState(remote.musicEnabled !== false);
+        sound.musicEnabled = remote.musicEnabled !== false;
+        setProfile({
+          ...INITIAL_PROFILE,
+          ...remote.profile,
+          avatarUrl: remote.profile?.avatarUrl ?? null,
+          usePresetAvatar: Boolean(remote.profile?.usePresetAvatar),
+        });
+        setMegapotCredits(remote.megapotCredits || 0);
+        setTicketsMinted(remote.ticketsMinted || 0);
+        setMissionProgress(remote.missionProgress || {});
+        setMissionsClaimed(remote.missionsClaimed || []);
+        setEconomyVersion(ECONOMY_VERSION);
+        const src = data.source === "table" ? "cloud" : "account sync";
+        setCloudNotice(`Progress synced (${src}).`);
+        window.setTimeout(() => setCloudNotice(null), 2500);
+      } catch {
+        // offline — keep local
+      } finally {
+        window.setTimeout(() => {
+          skipNextCloudPush.current = false;
+        }, 800);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [accountKey]);
 
   // Persist to this account only
@@ -317,15 +477,115 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         stats,
         matchHistory,
         soundEnabled,
+        musicEnabled,
+        economyVersion: ECONOMY_VERSION,
         profile,
         megapotCredits,
         ticketsMinted,
+        missionProgress,
+        missionsClaimed,
       };
       localStorage.setItem(accountStorageKey(accountRef.current), JSON.stringify(stateToSave));
     } catch {
       // Ignore
     }
-  }, [chips, xp, vipTier, equippedCardBack, equippedTableFelt, ownedCardBacks, ownedTableFelts, lastDailyBonusTime, rewardTrackDay, stats, matchHistory, soundEnabled, profile, megapotCredits, ticketsMinted, isLoaded]);
+
+    if (!accountRef.current.startsWith("google:") || skipNextCloudPush.current) return;
+    if (syncTimer.current) window.clearTimeout(syncTimer.current);
+    syncTimer.current = window.setTimeout(() => {
+      const payload: ProgressPayload = {
+        chips,
+        xp,
+        vipTier,
+        equippedCardBack,
+        equippedTableFelt,
+        ownedCardBacks,
+        ownedTableFelts,
+        lastDailyBonusTime,
+        rewardTrackDay,
+        stats,
+        matchHistory,
+        soundEnabled,
+        musicEnabled,
+        profile,
+        megapotCredits,
+        ticketsMinted,
+        missionProgress,
+        missionsClaimed,
+        economyVersion: ECONOMY_VERSION,
+        friends: readFriends(),
+      };
+      void fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+
+      // Mirror chips + ladder on-chain (rCHIP + RiverClub)
+      if (economyTimer.current) window.clearTimeout(economyTimer.current);
+      economyTimer.current = window.setTimeout(() => {
+        const googleId = accountRef.current.startsWith("google:")
+          ? accountRef.current.slice("google:".length)
+          : "";
+        if (!googleId) return;
+        let playAddress: `0x${string}`;
+        try {
+          playAddress = getPlayAddress(googleId);
+        } catch {
+          return;
+        }
+        void fetch("/api/economy/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            playAddress,
+            chips,
+            displayName: profile.displayName || "Player",
+            wins: stats.gamesWon,
+            tickets: ticketsMinted,
+            totalEarnings: stats.totalEarnings,
+          }),
+        })
+          .then(async (res) => {
+            const data = (await res.json()) as {
+              ok?: boolean;
+              chips?: { balance?: number; minted?: number; needsSelfBurn?: number };
+              club?: { ok?: boolean };
+            };
+            if (!data.ok) return;
+
+            let balance = data.chips?.balance;
+            const needBurn = Math.floor(Number(data.chips?.needsSelfBurn) || 0);
+            if (needBurn > 0) {
+              try {
+                const burned = await burnSelfRiverChips(googleId, needBurn);
+                if (burned.ok && typeof burned.balance === "number") balance = burned.balance;
+              } catch {
+                // will retry next sync
+              }
+            }
+            if (typeof balance === "number") setOnchainChips(balance);
+
+            const now = Date.now();
+            if (
+              ((data.chips?.minted || 0) > 0 || needBurn > 0 || data.club?.ok) &&
+              now - lastEconomyNotice.current > 20_000
+            ) {
+              lastEconomyNotice.current = now;
+              setCloudNotice(
+                needBurn > 0
+                  ? `You burned ${needBurn.toLocaleString()} rCHIP · ladder synced`
+                  : data.club?.ok
+                    ? `On-chain: ${(balance ?? 0).toLocaleString()} rCHIP · ladder updated`
+                    : `On-chain: ${(balance ?? 0).toLocaleString()} rCHIP`
+              );
+              window.setTimeout(() => setCloudNotice(null), 2800);
+            }
+          })
+          .catch(() => {});
+      }, 2200);
+    }, 1200);
+  }, [chips, xp, vipTier, equippedCardBack, equippedTableFelt, ownedCardBacks, ownedTableFelts, lastDailyBonusTime, rewardTrackDay, stats, matchHistory, soundEnabled, musicEnabled, profile, megapotCredits, ticketsMinted, missionProgress, missionsClaimed, economyVersion, isLoaded]);
 
   const updateProfile = (newProfile: Partial<UserProfile>) => {
     setProfile((prev) => ({ ...prev, ...newProfile }));
@@ -334,7 +594,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const setSoundEnabled = (enabled: boolean) => {
     setSoundEnabledState(enabled);
-    sound.enabled = enabled;
+    sound.sfxEnabled = enabled;
+  };
+
+  const setMusicEnabled = (enabled: boolean) => {
+    setMusicEnabledState(enabled);
+    sound.setMusicEnabled(enabled);
+    if (enabled) sound.unlock();
   };
 
   const addChips = (amount: number) => {
@@ -345,7 +611,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   const addXp = (amount: number) => {
     setXp((prev) => {
       const next = prev + amount;
-      setVipTier(getTierForXp(next));
+      setVipTier(getTierForXp(next, stats.gamesWon));
       return next;
     });
   };
@@ -357,45 +623,66 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
+  const bumpMission = (id: string, by = 1) => {
+    setMissionProgress((prev) => ({
+      ...prev,
+      [id]: Math.max(0, (prev[id] || 0) + by),
+    }));
+  };
+
+  const claimMission = (id: string): boolean => {
+    const def = MISSIONS.find((m) => m.id === id);
+    if (!def) return false;
+    if (missionsClaimed.includes(id)) return false;
+    if ((missionProgress[id] || 0) < def.target) return false;
+    setMissionsClaimed((prev) => (prev.includes(id) ? prev : [...prev, id]));
+    setChips((c) => c + def.rewardChips);
+    addXp(def.rewardXp);
+    sound.playMission();
+    return true;
+  };
+
   const equipCardBack = (id: string) => {
     if (!ownedCardBacks.includes(id)) return;
     setEquippedCardBack(id);
-    sound.playClick();
+    sound.playEquip();
   };
 
   const equipTableFelt = (id: string) => {
     if (!ownedTableFelts.includes(id)) return;
     setEquippedTableFelt(id);
-    sound.playClick();
+    sound.playEquip();
   };
 
   const buyCardBack = (id: string, priceChips: number): boolean => {
     if (ownedCardBacks.includes(id)) {
       setEquippedCardBack(id);
-      sound.playClick();
+      sound.playEquip();
       return true;
     }
     if (chips < priceChips) return false;
     setChips((prev) => prev - priceChips);
     setOwnedCardBacks((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setEquippedCardBack(id);
-    addXp(120);
-    sound.playWin();
+    addXp(40);
+    bumpMission("shop-style");
+    sound.playEquip();
     return true;
   };
 
   const buyTableFelt = (id: string, priceChips: number): boolean => {
     if (ownedTableFelts.includes(id)) {
       setEquippedTableFelt(id);
-      sound.playClick();
+      sound.playEquip();
       return true;
     }
     if (chips < priceChips) return false;
     setChips((prev) => prev - priceChips);
     setOwnedTableFelts((prev) => (prev.includes(id) ? prev : [...prev, id]));
     setEquippedTableFelt(id);
-    addXp(120);
-    sound.playWin();
+    addXp(40);
+    bumpMission("shop-style");
+    sound.playEquip();
     return true;
   };
 
@@ -405,10 +692,11 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
+    const reward = dailyRewardForDay(rewardTrackDay);
     setLastDailyBonusTime(now);
     setRewardTrackDay((prev) => (prev >= 16 ? 1 : prev + 1));
-    addChips(100000);
-    addXp(1000);
+    addChips(reward.chips);
+    addXp(reward.xp);
     setMegapotCredits((c) => c + 1);
     sound.playWin();
     return true;
@@ -421,7 +709,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   };
 
   const awardMegapotWin = (opts?: { showdown?: boolean }) => {
-    const bonus = opts?.showdown ? 1 : 0;
+    // Base stake (+1 showdown). Streak bonus when this win continues a streak.
+    const bonus = (opts?.showdown ? 1 : 0) + (stats.currentStreak >= 1 ? 1 : 0);
     const gained = sessionStake + bonus;
     setMegapotCredits((c) => c + gained);
     sound.playWin();
@@ -436,6 +725,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const markTicketMinted = () => {
     setTicketsMinted((n) => n + 1);
+    bumpMission("claim-ticket");
   };
 
   const recordHandResult = (
@@ -444,44 +734,61 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     opponentName: string,
     handName: string
   ) => {
+    const ledger = Math.trunc(netChips);
     if (win) {
-      addChips(netChips);
-    } else if (netChips < 0) {
-      setChips((prev) => Math.max(0, prev + netChips));
+      addChips(Math.max(0, ledger));
+    } else if (ledger < 0) {
+      setChips((prev) => Math.max(0, prev + ledger));
     }
 
-    // Update player stats
+    const xpGain = xpFromHand(win, Math.abs(ledger) || (win ? 800 : 400));
+    const oldLevel = getPlayerLevel(xp, stats.gamesWon);
+    const nextWins = win ? stats.gamesWon + 1 : stats.gamesWon;
+
     setStats((prev) => {
       const newStreak = win ? prev.currentStreak + 1 : 0;
-      const newHandsPlayed = prev.handsPlayed + 1;
-      const newGamesWon = win ? prev.gamesWon + 1 : prev.gamesWon;
-      const newBiggestWin = win ? Math.max(prev.biggestWin, netChips) : prev.biggestWin;
-      const newTotal = win ? prev.totalEarnings + netChips : prev.totalEarnings;
       return {
-        handsPlayed: newHandsPlayed,
-        gamesWon: newGamesWon,
-        biggestWin: newBiggestWin,
+        handsPlayed: prev.handsPlayed + 1,
+        gamesWon: win ? prev.gamesWon + 1 : prev.gamesWon,
+        biggestWin: win ? Math.max(prev.biggestWin, Math.max(0, ledger)) : prev.biggestWin,
         currentStreak: newStreak,
-        totalEarnings: newTotal,
+        totalEarnings: win ? prev.totalEarnings + Math.max(0, ledger) : prev.totalEarnings,
       };
     });
 
-    addXp(win ? 240 : 80);
+    setMissionProgress((prev) => {
+      const next = { ...prev };
+      next["first-hand"] = Math.max(next["first-hand"] || 0, 1);
+      next["play-three"] = (next["play-three"] || 0) + 1;
+      if (win) {
+        next["win-one"] = Math.max(next["win-one"] || 0, 1);
+        next["streak-two"] = Math.max(next["streak-two"] || 0, stats.currentStreak + 1);
+      } else {
+        next["streak-two"] = 0;
+      }
+      return next;
+    });
 
-    // Add match history item
-    const newMatch: MatchRecord = {
-      opponent: opponentName,
-      result: win ? "win" : "loss",
-      hand: handName,
-      chips: win ? `+${netChips.toLocaleString()}` : `${netChips.toLocaleString()}`,
-      time: "Just now",
-    };
+    addXp(xpGain);
+    setVipTier(getTierForXp(xp + xpGain, nextWins));
+    if (getPlayerLevel(xp + xpGain, nextWins) > oldLevel) {
+      window.setTimeout(() => sound.playLevelUp(), 180);
+    }
 
-    setMatchHistory((prev) => [newMatch, ...prev.slice(0, 9)]);
+    setMatchHistory((prev) => [
+      {
+        opponent: opponentName,
+        result: win ? "win" : "loss",
+        hand: handName,
+        chipsDelta: win ? Math.max(0, ledger) : Math.min(0, ledger),
+        at: Date.now(),
+      },
+      ...prev.slice(0, 19),
+    ]);
   };
 
   const resetProgress = () => {
-    setChips(50000);
+    setChips(STARTING_CHIPS);
     setXp(0);
     setVipTier(getTierForXp(0));
     setEquippedCardBack("classic");
@@ -496,6 +803,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setMegapotCredits(0);
     setTicketsMinted(0);
     setSessionStake(1);
+    setMissionProgress({});
+    setMissionsClaimed([]);
     try {
       localStorage.removeItem(accountStorageKey(accountRef.current));
     } catch {
@@ -518,13 +827,19 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         stats,
         matchHistory,
         soundEnabled,
+        musicEnabled,
         profile,
         chainId,
         megapotCredits,
         ticketsMinted,
         sessionStake,
+        missionProgress,
+        missionsClaimed,
+        cloudNotice,
+        onchainChips,
         updateProfile,
         setSoundEnabled,
+        setMusicEnabled,
         addChips,
         deductChips,
         equipCardBack,
@@ -537,6 +852,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         awardMegapotWin,
         consumeMegapotCredit,
         markTicketMinted,
+        bumpMission,
+        claimMission,
         resetProgress,
       }}
     >

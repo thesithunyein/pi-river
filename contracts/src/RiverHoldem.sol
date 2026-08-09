@@ -266,13 +266,24 @@ contract RiverHoldem is ConfidentialDeck {
 
     /// @notice Submit one attested card for showdown. slots 0-1 = P0 holes, 2-3 = P1 holes, 4-8 = board.
     mapping(uint256 => uint8[9]) internal showdownCards;
-    mapping(uint256 => uint8) internal showdownFilled; // bitfield
+    /// @dev 9 slots need 9 bits — uint8 overflowed bit 8 and made finalize always revert "incomplete".
+    mapping(uint256 => uint16) internal showdownFilled; // bitfield
+
+    function getShowdownFilled(uint256 tableId) external view returns (uint16) {
+        return showdownFilled[tableId];
+    }
 
     function submitShowdownCard(uint256 tableId, uint8 slot, uint256 value, bytes[] calldata sigs) external {
         Table storage t = tables[tableId];
         require(t.stage == Stage.Showdown, "not showdown");
         require(msg.sender == t.player0 || msg.sender == t.player1, "seat");
         require(slot < 9, "slot");
+
+        uint16 bit = uint16(1) << slot;
+        // Idempotent: already submitted this slot
+        if (showdownFilled[tableId] & bit != 0) {
+            return;
+        }
 
         euint256 handle;
         if (slot == 0) handle = hole0[tableId][0];
@@ -283,7 +294,7 @@ contract RiverHoldem is ConfidentialDeck {
 
         uint256 verified = _verifyValue(handle, value, _copySigs(sigs));
         showdownCards[tableId][slot] = CardLib.toId(verified);
-        showdownFilled[tableId] |= uint8(uint16(1) << slot);
+        showdownFilled[tableId] |= bit;
     }
 
     function finalizeShowdown(uint256 tableId) external {

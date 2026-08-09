@@ -6,10 +6,10 @@ import { botReclaimFunds } from "@/lib/bot/reclaim";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** Enough for one createTable + gas. Shuffle fee is topped up separately when possible. */
-const DEFAULT_TARGET = parseEther("0.000028");
-const MIN_PLAY = parseEther("0.000021");
-const MIN_SEND = parseEther("0.00001");
+/** Enough for ~3–4 hands: create/join gas + buy-ins; shuffle fees prefer house fundFees. */
+const DEFAULT_TARGET = parseEther("0.00045");
+const MIN_PLAY = parseEther("0.00022");
+const MIN_SEND = parseEther("0.00002");
 const recent = new Map<string, number>();
 
 function normalizeAddress(raw: unknown): Address | null {
@@ -42,7 +42,7 @@ export async function POST(req: Request) {
 
     const key = `${(body.googleUserId || "").slice(0, 64)}:${to.toLowerCase()}`;
     const last = recent.get(key) || 0;
-    if (Date.now() - last < 12_000) {
+    if (Date.now() - last < 8_000) {
       const client = getBotPublicClient();
       const bal = await client.getBalance({ address: to });
       return NextResponse.json({
@@ -69,7 +69,8 @@ export async function POST(req: Request) {
     }
 
     let balance = await publicClient.getBalance({ address: to });
-    if (balance >= MIN_PLAY) {
+    // Top up toward multi-hand target even if already playable
+    if (balance >= target) {
       recent.set(key, Date.now());
       return NextResponse.json({
         ok: true,
@@ -79,7 +80,7 @@ export async function POST(req: Request) {
       });
     }
 
-    const need = target > balance ? target - balance : MIN_PLAY - balance;
+    const need = target - balance;
     let houseBal = await publicClient.getBalance({ address: house.address });
     const gasReserve = parseEther("0.000008"); // leave bot gas for join
 

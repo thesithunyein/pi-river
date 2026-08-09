@@ -41,19 +41,26 @@ export function HowItWorksModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-4 backdrop-blur-sm sm:items-center"
+      className="fixed inset-0 z-[80] flex items-end justify-center bg-black/75 p-4 backdrop-blur-md sm:items-center"
       role="dialog"
       aria-modal="true"
       aria-labelledby="how-it-works-title"
       onClick={onClose}
     >
       <div
-        className="animate-rise w-full max-w-md overflow-hidden rounded-[28px] border border-white/12 bg-[#161322] shadow-[0_28px_80px_rgba(0,0,0,0.55)]"
+        className="animate-rise relative w-full max-w-md overflow-hidden rounded-[28px] border border-[#F5C518]/22 bg-[linear-gradient(165deg,#1c1a28,#0e0c16)] shadow-[0_32px_90px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.1)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="border-b border-white/8 bg-gradient-to-br from-[#F5C518]/15 via-transparent to-[#7B5CFF]/10 px-5 pb-4 pt-5">
-          <p className="text-[10px] font-bold uppercase tracking-[0.24em] text-[#F5C518]">Tips</p>
-          <h2 id="how-it-works-title" className="mt-1 font-display text-2xl font-black text-white">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#F5C518]/55 to-transparent"
+        />
+        <div className="relative border-b border-white/8 bg-gradient-to-br from-[#F5C518]/18 via-transparent to-emerald-900/20 px-5 pb-4 pt-5">
+          <p className="inline-flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.24em] text-[#F5C518]">
+            <span className="h-1.5 w-1.5 rounded-full bg-[#F5C518] shadow-[0_0_8px_rgba(245,197,24,0.9)]" />
+            Tips
+          </p>
+          <h2 id="how-it-works-title" className="mt-1.5 font-display text-2xl font-black tracking-tight text-white">
             How it works
           </h2>
           <p className="mt-1 text-sm text-[#9AA0B4]">
@@ -61,14 +68,17 @@ export function HowItWorksModal({
           </p>
         </div>
 
-        <ul className="max-h-[min(58vh,420px)] space-y-3 overflow-y-auto px-5 py-4">
+        <ul className="max-h-[min(58vh,420px)] space-y-2.5 overflow-y-auto px-5 py-4">
           {TIPS.map(({ icon: Icon, title, body }, i) => (
             <li
               key={title}
-              className="flex gap-3 rounded-2xl border border-white/6 bg-white/[0.03] p-3"
+              className="flex gap-3 rounded-2xl border border-white/8 bg-white/[0.04] p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
               style={{ animationDelay: `${i * 40}ms` }}
             >
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#F5C518]/12 text-[#F5C518]">
+              <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-[#F5C518]/25 bg-[linear-gradient(160deg,rgba(245,197,24,0.22),rgba(245,197,24,0.06))] text-[#F5C518]">
+                <span className="absolute -left-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-[#F5C518] text-[10px] font-black text-[#1a1208] shadow-[0_4px_10px_rgba(245,197,24,0.45)]">
+                  {i + 1}
+                </span>
                 <Icon className="h-5 w-5" />
               </div>
               <div>
@@ -83,7 +93,7 @@ export function HowItWorksModal({
           <button
             type="button"
             onClick={onClose}
-            className="brand-gradient flex min-h-12 w-full items-center justify-center rounded-2xl text-sm font-black text-[#1A1400] shadow-[0_10px_28px_rgba(245,197,24,0.28)] transition hover:brightness-105"
+            className="brand-gradient flex min-h-12 w-full items-center justify-center rounded-2xl border border-[#F5C518]/35 text-sm font-black text-[#1A1400] shadow-[0_10px_28px_rgba(245,197,24,0.28),inset_0_1px_0_rgba(255,255,255,0.4)] transition hover:brightness-105"
           >
             Got it. Let&apos;s go
           </button>

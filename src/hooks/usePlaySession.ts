@@ -46,9 +46,9 @@ export function usePlaySession() {
 
   const publicClient = useMemo(() => getPlayPublicClient(), []);
 
-  const ensureFunded = useCallback(async () => {
+  const ensureFunded = useCallback(async (minBalance?: bigint) => {
     if (!googleUserId) throw new Error("Sign in with Google to play.");
-    return ensurePlayWalletFunded(googleUserId);
+    return ensurePlayWalletFunded(googleUserId, minBalance);
   }, [googleUserId]);
 
   const writeContract = useCallback(

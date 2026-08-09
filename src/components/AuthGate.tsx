@@ -8,6 +8,8 @@ import Image from "next/image";
 import { GoogleMark, MetaMaskMark } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { HowItWorksModal } from "@/components/welcome/HowItWorksModal";
+import { WelcomeFeltHero } from "@/components/welcome/WelcomeFeltHero";
+import { sound } from "@/lib/sound";
 import {
   clearLinkedIdentity,
   pauseWalletLink,
@@ -65,72 +67,90 @@ function EntryScreen({
         className="pointer-events-none absolute inset-0"
         style={{
           background:
-            "radial-gradient(ellipse 80% 50% at 50% -5%, rgba(245,197,24,0.28), transparent 55%), radial-gradient(ellipse 55% 45% at 90% 85%, rgba(123,92,255,0.22), transparent 50%), radial-gradient(ellipse 40% 30% at 10% 70%, rgba(32,89,62,0.35), transparent 50%)",
+            "radial-gradient(ellipse 90% 60% at 50% -5%, rgba(245,197,24,0.28), transparent 52%), radial-gradient(ellipse 70% 50% at 50% 55%, rgba(20,90,55,0.45), transparent 62%), radial-gradient(ellipse 48% 36% at 92% 78%, rgba(32,89,62,0.3), transparent 52%), linear-gradient(180deg, #0B0A14 0%, #0e1210 45%, #0B0A14 100%)",
         }}
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -left-16 top-24 h-40 w-40 rounded-full bg-[#F5C518]/10 blur-3xl animate-float"
+        className="pointer-events-none absolute inset-x-0 top-[18%] h-[42%] opacity-40"
+        style={{
+          background:
+            "radial-gradient(ellipse at center, rgba(36,138,88,0.55) 0%, transparent 70%)",
+        }}
       />
       <div
         aria-hidden
-        className="pointer-events-none absolute -right-10 bottom-28 h-36 w-36 rounded-full bg-[#7B5CFF]/15 blur-3xl animate-float-delayed"
+        className="pointer-events-none absolute -left-16 top-24 h-40 w-40 rounded-full bg-[#F5C518]/12 blur-3xl animate-float"
+      />
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -right-10 bottom-28 h-36 w-36 rounded-full bg-emerald-600/14 blur-3xl animate-float-delayed"
       />
 
       <div className="relative w-full max-w-md space-y-5 animate-fade-in">
         <div className="flex flex-col items-center text-center">
-          <Image
-            src="/brand/mi-mark.svg"
-            alt="pi River"
-            width={96}
-            height={96}
-            className="h-24 w-24 rounded-[30px] shadow-[0_20px_50px_rgba(245,197,24,0.4)]"
-            priority
-          />
-          <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.28em] text-[#F5C518]/90">
-            pi River
-          </p>
-          <h1 className="mt-2 font-display text-4xl font-black leading-tight text-white">
-            {step === "home" ? (
-              <>
-                Sit down.
-                <br />
-                <span className="text-[#F5C518]">Have fun.</span>
-              </>
-            ) : (
-              "Get started"
-            )}
+          <div className="relative">
+            <div
+              aria-hidden
+              className="absolute -inset-4 rounded-[36px] bg-[#F5C518]/20 blur-2xl"
+            />
+            <Image
+              src="/brand/mi-mark.svg"
+              alt="pi River"
+              width={88}
+              height={88}
+              className="relative h-[88px] w-[88px] rounded-[28px] shadow-[0_0_0_1px_rgba(245,197,24,0.45),0_24px_56px_rgba(245,197,24,0.35)]"
+              priority
+            />
+          </div>
+          <h1 className="mt-5 font-display text-[2.75rem] font-black leading-[1.02] tracking-tight text-white sm:text-5xl">
+            pi <span className="brand-text">River</span>
           </h1>
-          <p className="mt-3 max-w-sm text-sm leading-relaxed text-[#9AA0B4]">
+          <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#9AA0B4]">
             {step === "home"
-              ? "Private heads-up poker. Win hands. Earn jackpot tickets."
+              ? "Confidential heads-up Hold’em. Sit down, play, earn jackpot tickets."
               : "Pick how you want to join. Google is the fastest."}
           </p>
         </div>
 
         {step === "home" ? (
-          <div className="space-y-3 rounded-[28px] border border-white/10 bg-[#161322]/95 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur">
-            <GradientButton
-              className="w-full min-h-14 text-base"
-              onClick={() => setStep("start")}
-            >
-              Get started
-            </GradientButton>
-            <button
-              type="button"
-              onClick={() => setHowOpen(true)}
-              className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-white/12 bg-white/5 text-sm font-black text-white transition hover:bg-white/10"
-            >
-              How it works
-            </button>
-          </div>
+          <>
+            <WelcomeFeltHero />
+            <div className="relative space-y-3 overflow-hidden rounded-[28px] border border-[#F5C518]/22 bg-[linear-gradient(165deg,rgba(22,28,24,0.97),rgba(12,14,16,0.98))] p-5 shadow-[0_28px_70px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur">
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#F5C518]/50 to-transparent"
+              />
+              <GradientButton
+                size="lg"
+                className="w-full text-base"
+                onClick={() => {
+                  sound.unlock();
+                  setStep("start");
+                }}
+              >
+                Sit at the table
+              </GradientButton>
+              <button
+                type="button"
+                onClick={() => setHowOpen(true)}
+                className="flex min-h-12 w-full items-center justify-center rounded-2xl border border-white/14 bg-white/[0.06] text-sm font-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.1)] transition hover:bg-white/10"
+              >
+                How it works
+              </button>
+            </div>
+          </>
         ) : (
-          <div className="space-y-3 rounded-[28px] border border-white/10 bg-[#161322]/95 p-5 shadow-[0_24px_60px_rgba(0,0,0,0.45)] backdrop-blur">
+          <div className="relative space-y-3 overflow-hidden rounded-[28px] border border-white/12 bg-[linear-gradient(165deg,rgba(22,28,24,0.97),rgba(12,14,16,0.98))] p-5 shadow-[0_28px_70px_rgba(0,0,0,0.5),inset_0_1px_0_rgba(255,255,255,0.1)] backdrop-blur">
+            <div
+              aria-hidden
+              className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"
+            />
             <button
               type="button"
               onClick={onGoogle}
               disabled={googleLoading}
-              className="relative z-10 flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-white px-4 text-sm font-black text-slate-900 transition hover:bg-slate-100 disabled:opacity-50"
+              className="relative z-10 flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl bg-white px-4 text-sm font-black text-slate-900 shadow-[0_10px_28px_rgba(255,255,255,0.12)] transition hover:bg-slate-100 disabled:opacity-50"
             >
               <GoogleMark className="h-5 w-5" />
               {googleLoading ? "Opening Google…" : "Continue with Google"}
@@ -148,7 +168,7 @@ function EntryScreen({
               type="button"
               onClick={onWallet}
               disabled={walletLoading}
-              className="relative z-10 flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl border border-white/12 bg-[#1f1a2e] px-4 text-sm font-black text-white transition hover:bg-[#2a2438] disabled:opacity-50"
+              className="relative z-10 flex min-h-12 w-full touch-manipulation items-center justify-center gap-3 rounded-2xl border border-[#F5C518]/25 bg-[#1a1f1c] px-4 text-sm font-black text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] transition hover:border-[#F5C518]/40 hover:bg-[#222a26] disabled:opacity-50"
             >
               <MetaMaskMark className="h-6 w-6 shrink-0" />
               {walletLoading ? "Connecting…" : "Continue with MetaMask"}
@@ -171,16 +191,6 @@ function EntryScreen({
             </button>
           </div>
         )}
-
-        {step === "home" ? (
-          <button
-            type="button"
-            onClick={() => setHowOpen(true)}
-            className="mx-auto block text-center text-[11px] font-semibold text-[#7d8398] underline-offset-2 hover:text-[#F5C518] hover:underline"
-          >
-            New here? Peek at the tips
-          </button>
-        ) : null}
       </div>
 
       <HowItWorksModal open={howOpen} onClose={() => setHowOpen(false)} />

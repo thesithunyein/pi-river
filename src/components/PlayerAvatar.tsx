@@ -49,9 +49,9 @@ export function PlayerAvatar({
         width={size}
         height={size}
         className={cn(
-          "object-cover",
-          showRing ? "ring-2 ring-[#F5C518]/50" : "",
-          className
+          "rounded-full object-cover shadow-[0_8px_20px_rgba(0,0,0,0.35)]",
+          showRing ? "ring-2 ring-[#F5C518]/55 ring-offset-2 ring-offset-[#0B0A14]" : "",
+          className,
         )}
         style={{ width: size, height: size }}
         referrerPolicy="no-referrer"

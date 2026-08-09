@@ -12,6 +12,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Invalid table id." }, { status: 400 });
     }
     const result = await botSubmitShowdown(tableId);
+    if (result.skipped) {
+      return NextResponse.json(
+        { error: result.reason || "Not at showdown.", skipped: true, reason: result.reason },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     return NextResponse.json(
