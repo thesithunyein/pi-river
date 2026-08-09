@@ -251,14 +251,30 @@ export default function OnchainTablePage() {
     title: string;
     subtitle?: string;
     ticketGained?: number;
+    oppShow?: { rank: string; suit: string; red: boolean }[];
   } | null>(null);
   const [holdDeal, setHoldDeal] = useState(false);
   const [claimingTicket, setClaimingTicket] = useState(false);
   const [claimTicketError, setClaimTicketError] = useState<string | null>(null);
 
-  function celebrateHand(win: boolean, title: string, subtitle?: string, ticketGained = 0) {
+  function toOverlayCards(cards: DecodedCard[]) {
+    return cards.map((c) => ({
+      rank: c.rank,
+      suit: c.label.slice(-1),
+      red: c.isRed,
+    }));
+  }
+
+  function celebrateHand(
+    win: boolean,
+    title: string,
+    subtitle?: string,
+    ticketGained = 0,
+    shownOpp?: DecodedCard[]
+  ) {
     setClaimTicketError(null);
-    setHandFx({ win, title, subtitle, ticketGained: win ? ticketGained : 0 });
+    const opp = shownOpp && shownOpp.length === 2 ? toOverlayCards(shownOpp) : undefined;
+    setHandFx({ win, title, subtitle, ticketGained: win ? ticketGained : 0, oppShow: opp });
     if (win) sound.playCelebrate();
     else sound.playLose();
   }
@@ -343,8 +359,8 @@ export default function OnchainTablePage() {
     setOppCards([]);
   }
 
-  async function revealBotHoles() {
-    if (!vsBot) return;
+  async function revealBotHoles(): Promise<DecodedCard[]> {
+    if (!vsBot) return [];
     try {
       const res = await fetch("/api/bot/peek-holes", {
         method: "POST",
@@ -352,12 +368,14 @@ export default function OnchainTablePage() {
         body: JSON.stringify({ tableId: tableId.toString() }),
       });
       const data = (await res.json()) as { values?: Array<number | string>; error?: string };
-      if (!res.ok || !data.values || data.values.length < 2) return;
-      setOppCards(data.values.slice(0, 2).map((v) => decodeCard(BigInt(v))));
+      if (!res.ok || !data.values || data.values.length < 2) return [];
+      const cards = data.values.slice(0, 2).map((v) => decodeCard(BigInt(v)));
+      setOppCards(cards);
       sound.playCardSlide();
       setLog("River Bot shows its cards.");
+      return cards;
     } catch {
-      // Cosmetic only — ignore reveal failures
+      return [];
     }
   }
 
@@ -452,43 +470,41 @@ export default function OnchainTablePage() {
         lastHoleKey.current = "";
         lastBoardKey.current = "";
         holePeekRef.current = null;
-        // Keep last board + your holes on-screen during bot reveal pause
+        // Keep last board + holes on-screen during bot reveal pause
         if (!holdDealRef.current) {
           setMyCards([]);
           setBoardCards([]);
           setOppCards([]);
         }
       }
-    } else {
-      // Fresh hand — wipe prior reveal
-      if (holdDealTimer.current) window.clearTimeout(holdDealTimer.current);
-      holdDealTimer.current = null;
-      holdDealRef.current = false;
-      setHoldDeal(false);
-      setOppCards([]);
-      if (address && (address === next.player0 || address === next.player1)) {
-        try {
-          const handles = (await publicClient.readContract({
-            address: RIVER_HOLDEM_ADDRESS,
-            abi: riverHoldemAbi,
-            functionName: "getHoleHandles",
-            args: [tableId],
-            account: address,
-          })) as readonly [Hex, Hex];
-          const holeKey = `${handles[0]}|${handles[1]}`.toLowerCase();
-          if (
-            walletClient &&
-            handles[0] !== (`0x${"0".repeat(64)}` as Hex) &&
-            holeKey !== lastHoleKey.current
-          ) {
+    } else if (address && (address === next.player0 || address === next.player1)) {
+      try {
+        const handles = (await publicClient.readContract({
+          address: RIVER_HOLDEM_ADDRESS,
+          abi: riverHoldemAbi,
+          functionName: "getHoleHandles",
+          args: [tableId],
+          account: address,
+        })) as readonly [Hex, Hex];
+        const holeKey = `${handles[0]}|${handles[1]}`.toLowerCase();
+        const freshHand =
+          handles[0] !== (`0x${"0".repeat(64)}` as Hex) && holeKey !== lastHoleKey.current;
+        if (freshHand) {
+          // New deal only — wipe prior opponent reveal
+          if (holdDealTimer.current) window.clearTimeout(holdDealTimer.current);
+          holdDealTimer.current = null;
+          holdDealRef.current = false;
+          setHoldDeal(false);
+          setOppCards([]);
+          if (walletClient) {
             const peeked = await peekMyCards(walletClient, [handles[0], handles[1]]);
             holePeekRef.current = peeked;
             lastHoleKey.current = holeKey;
             setMyCards(peeked.map((p) => decodeCard(p.value)));
           }
-        } catch (e) {
-          console.warn("peek failed", e);
         }
+      } catch (e) {
+        console.warn("peek failed", e);
       }
     }
 
@@ -612,19 +628,20 @@ export default function OnchainTablePage() {
           if (data.action === "raise") setLog(pickLine(BOT_LINES.raise));
           else if (data.action === "fold") {
             setLog(pickLine(BOT_LINES.fold));
+            pauseAutoDeal(7000);
+            const shown = await revealBotHoles();
+            await new Promise((r) => window.setTimeout(r, 900));
             if (!awardedHand.current) {
               const gained = awardMegapotWin();
               awardedHand.current = true;
               const chips = scoreFromStacks(handStartStack.current, me?.stack ?? null);
               recordHandResult(true, chips, "River Bot", "Opponent folded");
               setBanner(`River Bot folds — you take the pot. +${gained} ticket.`);
-              celebrateHand(true, "Opponent folds", `+${chips.toLocaleString()} chips`, gained);
+              celebrateHand(true, "Opponent folds", `+${chips.toLocaleString()} chips`, gained, shown);
             } else {
               setBanner("River Bot folds — pot is yours.");
-              celebrateHand(true, "Opponent folds", "Deal again when ready");
+              celebrateHand(true, "Opponent folds", "Deal again when ready", 0, shown);
             }
-            pauseAutoDeal();
-            await revealBotHoles();
           } else if (data.action === "check") setLog(pickLine(BOT_LINES.check));
           else setLog(pickLine(BOT_LINES.call));
         }
@@ -811,15 +828,17 @@ export default function OnchainTablePage() {
         recordHandResult(false, -loss, oppName, "You folded");
         setBanner(
           vsBot
-            ? `You folded — pot goes to River Bot (−${loss} chips). Bot cards flipping up…`
+            ? `You folded — pot goes to River Bot (−${loss} chips).`
             : `You folded — pot goes to your opponent (−${loss} chips).`,
         );
         setLog("Hand over. You folded.");
-        celebrateHand(false, "You folded", `−${loss} chips · pot to opponent`);
+        let shown: DecodedCard[] = [];
         if (vsBot) {
-          pauseAutoDeal();
-          await revealBotHoles();
+          pauseAutoDeal(7000);
+          shown = await revealBotHoles();
+          await new Promise((r) => window.setTimeout(r, 900));
         }
+        celebrateHand(false, "You folded", `−${loss} chips`, 0, shown);
       }
       await refresh();
     } catch (err) {
@@ -1367,6 +1386,16 @@ export default function OnchainTablePage() {
       args: [tableId],
     });
     await waitTx(hash);
+
+    // Keep bot cards face-up through settle + result beat
+    let shownOpp: DecodedCard[] = [];
+    if (vsBot) {
+      pauseAutoDeal(7000);
+      shownOpp = await revealBotHoles();
+      // Let the flip register before the result overlay
+      await new Promise((r) => window.setTimeout(r, 1600));
+    }
+
     await refresh();
 
     let after = before;
@@ -1410,12 +1439,12 @@ export default function OnchainTablePage() {
         recordHandResult(true, chips, vsBot ? "River Bot" : "Friend", "Showdown win");
         setBanner(`You won the showdown. +${gained} ticket.`);
         setLog("You won this hand.");
-        celebrateHand(true, "Showdown win", `+${chips.toLocaleString()} chips`, gained);
+        celebrateHand(true, "Showdown win", `+${chips.toLocaleString()} chips`, gained, shownOpp);
       } else if (after < before) {
         recordHandResult(false, -chips, vsBot ? "River Bot" : "Friend", "Showdown loss");
-        setBanner("You lost this hand. Better luck next deal.");
+        setBanner("You lost this hand.");
         setLog("You lost this hand.");
-        celebrateHand(false, "Showdown loss", `−${chips.toLocaleString()} chips this pot`);
+        celebrateHand(false, "Showdown loss", `−${chips.toLocaleString()} chips this pot`, 0, shownOpp);
       } else {
         setBanner("Chop / no change. Deal again.");
         setLog("Stacks unchanged.");
@@ -1515,6 +1544,7 @@ export default function OnchainTablePage() {
         win={handFx?.win ?? false}
         title={handFx?.title ?? ""}
         subtitle={handFx?.subtitle}
+        oppCards={handFx?.oppShow}
         ticketGained={handFx?.ticketGained ?? 0}
         claiming={claimingTicket}
         claimError={claimTicketError}

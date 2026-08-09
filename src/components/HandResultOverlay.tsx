@@ -6,12 +6,19 @@ import { BoltIcon, TrophyIcon } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { PremiumChip } from "@/components/PremiumChip";
 
+export type OverlayCard = {
+  rank: string;
+  suit: string;
+  red: boolean;
+};
+
 type Props = {
   open: boolean;
   win: boolean;
   title: string;
   subtitle?: string;
-  /** Ticket credits just earned this hand (real Megapot credits). */
+  /** Opponent hole cards to show at settle (esp. showdown loss). */
+  oppCards?: OverlayCard[];
   ticketGained?: number;
   claiming?: boolean;
   claimError?: string | null;
@@ -19,12 +26,27 @@ type Props = {
   onContinue: () => void;
 };
 
+function MiniCard({ card }: { card: OverlayCard }) {
+  return (
+    <div
+      className={cn(
+        "flex h-14 w-10 flex-col items-center justify-center rounded-lg border border-black/10 bg-[#f7f4ef] shadow-md",
+        card.red ? "text-[#c41e3a]" : "text-[#1a1a1a]"
+      )}
+    >
+      <span className="text-sm font-black leading-none">{card.rank}</span>
+      <span className="text-base leading-none">{card.suit}</span>
+    </div>
+  );
+}
+
 /** Full-screen win/lose beat — store-app trophy energy. */
 export function HandResultOverlay({
   open,
   win,
   title,
   subtitle,
+  oppCards,
   ticketGained = 0,
   claiming = false,
   claimError = null,
@@ -34,6 +56,7 @@ export function HandResultOverlay({
   if (!open) return null;
 
   const canClaim = win && ticketGained > 0 && Boolean(onClaimTicket);
+  const showOpp = Array.isArray(oppCards) && oppCards.length === 2;
 
   return (
     <div
@@ -90,6 +113,19 @@ export function HandResultOverlay({
         </h2>
         {subtitle ? (
           <p className="relative mt-2 text-sm leading-relaxed text-[#9AA0B4]">{subtitle}</p>
+        ) : null}
+
+        {showOpp ? (
+          <div className="relative mt-4">
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
+              Opponent showed
+            </p>
+            <div className="flex items-center justify-center gap-2">
+              {oppCards.map((c, i) => (
+                <MiniCard key={`${c.rank}${c.suit}-${i}`} card={c} />
+              ))}
+            </div>
+          </div>
         ) : null}
 
         {canClaim ? (
