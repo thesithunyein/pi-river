@@ -127,13 +127,13 @@ flowchart LR
 
 ### Inco track
 1. Open **Live** → Google sign-in  
-2. **Play vs Bot** — fold / check with **zero MetaMask** (silent play wallet)  
+2. **Quick Play / vs Bot** — fold / check with **zero MetaMask** (silent play wallet)  
 3. Watch **Inco · encrypted holes** until sealed showdown reveal  
 
 ### Megapot track
-1. Win a hand → toast / overlay credits a **Megapot ticket**  
+1. Win a hand → toast / overlay credits a **Megapot ticket** (progression credit)  
 2. **Rewards** → **Claim Megapot ticket**  
-3. House mints a real Megapot NFT to the play wallet on Base Sepolia  
+3. House buys a real Megapot NFT via `JackpotRandomTicketBuyer` to your play wallet on Base Sepolia (`source=pi-river`) 
 
 ---
 
