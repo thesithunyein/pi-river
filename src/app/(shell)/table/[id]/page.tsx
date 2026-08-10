@@ -265,6 +265,7 @@ export default function OnchainTablePage() {
     oppShow?: { rank: string; suit: string; red: boolean }[];
   } | null>(null);
   const [holdDeal, setHoldDeal] = useState(false);
+  const handFxOpenRef = useRef(false);
   const [claimingTicket, setClaimingTicket] = useState(false);
   const [claimTicketError, setClaimTicketError] = useState<string | null>(null);
 
@@ -286,6 +287,7 @@ export default function OnchainTablePage() {
     setClaimTicketError(null);
     const opp = shownOpp && shownOpp.length === 2 ? toOverlayCards(shownOpp) : undefined;
     setHandFx({ win, title, subtitle, ticketGained: win ? ticketGained : 0, oppShow: opp });
+    handFxOpenRef.current = true;
     if (win) sound.playCelebrate();
     else sound.playLose();
   }
@@ -778,9 +780,10 @@ export default function OnchainTablePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [table?.currentBet, table?.handLive, table?.stage, table?.buyIn]);
 
-  // Auto-deal next hand vs bot so the loop stays fun
+  // Auto-deal next hand vs bot — never while win/lose overlay is open
   useEffect(() => {
     if (!vsBot || !table || dealBusy.current || holdDeal || holdDealRef.current) return;
+    if (handFxOpenRef.current || handFx) return;
     if (table.handLive || (table.stage !== 6 && table.stage !== 0)) return;
     if (table.player1 === "0x0000000000000000000000000000000000000000") return;
     // Need at least ~4 BB each so the next hand can post blinds.
@@ -790,18 +793,54 @@ export default function OnchainTablePage() {
     dealBusy.current = true;
     setLog("Dealing the next hand…");
     const timer = window.setTimeout(async () => {
-      if (cancelled) return;
+      if (cancelled || handFxOpenRef.current) {
+        dealBusy.current = false;
+        return;
+      }
       try {
+        await fundTableShuffleFee(undefined, 0n);
+        if (cancelled || handFxOpenRef.current) {
+          dealBusy.current = false;
+          return;
+        }
         const res = await fetch("/api/bot/deal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ tableId: tableId.toString() }),
         });
         if (cancelled) return;
-        const data = (await res.json()) as { skipped?: boolean; error?: string };
+        const text = await res.text();
+        let data: { skipped?: boolean; error?: string; code?: string; shortfallEth?: string } = {};
+        try {
+          data = text.trim() ? (JSON.parse(text) as typeof data) : {};
+        } catch {
+          data = { error: "Could not deal. Tap Deal next hand." };
+        }
+        if (!res.ok && data.code === "NEEDS_FEE_FUND") {
+          await fundTableShuffleFee(data.shortfallEth, 0n);
+          if (!cancelled && !handFxOpenRef.current) {
+            const retry = await fetch("/api/bot/deal", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ tableId: tableId.toString() }),
+            });
+            const retryText = await retry.text();
+            if (retry.ok) {
+              sound.playCardSlide();
+              setBanner(null);
+              setOppCards([]);
+              setLog("Cards are flying. Private holes locked.");
+              await refresh();
+              return;
+            }
+          }
+        }
         if (!res.ok) {
-          setLog(data.error || "Could not deal. Tap Deal next hand.");
-          setBanner(data.error || "Could not deal. Tap Deal next hand.");
+          // Don't stomp the win/lose message if overlay somehow still open
+          if (!handFxOpenRef.current) {
+            setLog(data.error || "Could not deal. Tap Deal next hand.");
+            setBanner(data.error || "Could not deal. Tap Deal next hand.");
+          }
         } else if (!data.skipped) {
           sound.playCardSlide();
           setBanner(null);
@@ -810,17 +849,18 @@ export default function OnchainTablePage() {
         }
         if (!cancelled) await refresh();
       } catch {
-        if (!cancelled) setLog("Deal stalled. Tap Deal next hand.");
+        if (!cancelled && !handFxOpenRef.current) setLog("Deal stalled. Tap Deal next hand.");
       } finally {
         if (!cancelled) dealBusy.current = false;
       }
-    }, 600);
+    }, 1800);
     return () => {
       cancelled = true;
       window.clearTimeout(timer);
       dealBusy.current = false;
     };
-  }, [vsBot, table, tableId, refresh, holdDeal]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vsBot, table, tableId, refresh, holdDeal, handFx]);
 
   // Capture your stack when a hand starts — keep until scored (don't clear on settle)
   useEffect(() => {
@@ -1454,10 +1494,10 @@ export default function OnchainTablePage() {
       // Player holes + bot/board in parallel → much shorter settle for demo
       const [, botSide] = await Promise.all([submitMyHoles(), submitBotSide()]);
       if (vsBot && (!botSide.values || botSide.values.length < 2)) {
-        pauseAutoDeal(4000);
+        pauseAutoDeal(8000);
         await revealBotHoles();
       }
-      pauseAutoDeal(4200);
+      pauseAutoDeal(8000);
 
       await refresh();
 
@@ -1495,7 +1535,7 @@ export default function OnchainTablePage() {
     // Keep bot cards face-up through settle + result beat
     let shownOpp: DecodedCard[] = [];
     if (vsBot) {
-      pauseAutoDeal(4500);
+      pauseAutoDeal(8000);
       shownOpp = await revealBotHoles();
       await new Promise((r) => window.setTimeout(r, 400));
     }
@@ -1664,10 +1704,12 @@ export default function OnchainTablePage() {
             : undefined
         }
         onContinue={() => {
+          handFxOpenRef.current = false;
           setHandFx(null);
           setClaimTicketError(null);
         }}
         onHome={() => {
+          handFxOpenRef.current = false;
           setHandFx(null);
           clearActiveTable();
           router.push("/");
