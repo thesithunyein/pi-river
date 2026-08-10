@@ -15,6 +15,12 @@
   <a href="https://docs.megapot.io"><img alt="Megapot" src="https://img.shields.io/badge/Megapot-Sealed%20River-F5C518?style=for-the-badge" /></a>
 </p>
 
+<p align="center">
+  <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/License-MIT-yellow.svg" /></a>
+  <a href="SECURITY.md"><img alt="Security" src="https://img.shields.io/badge/Security-Policy-0B1220.svg" /></a>
+  <a href="CONTRIBUTING.md"><img alt="Contributing" src="https://img.shields.io/badge/Contributing-Guide-0284C7.svg" /></a>
+</p>
+
 **pi River** is a production-style heads-up poker product: Google sign-in, silent Base Sepolia play wallets, **Inco-encrypted hole cards**, fun-chip progression, cosmetics shop, club chat, and real **Megapot** ticket claims — one live URL for both jam tracks.
 
 | | |
@@ -237,6 +243,14 @@ Typical production keys (Vercel):
 ## Jam disclosure
 
 Summer Game Jam week (Aug 2026). Dual-track product on **one** URL — submit separately for **Inco** and **Megapot** tracks per Typeform rules.
+
+## License · Security · Contributing
+
+| Doc | |
+|---|---|
+| **License** | [MIT](./LICENSE) |
+| **Security** | [SECURITY.md](./SECURITY.md) — report vulns privately, not as public issues |
+| **Contributing** | [CONTRIBUTING.md](./CONTRIBUTING.md) |
 
 ---
 
