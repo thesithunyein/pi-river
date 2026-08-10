@@ -449,7 +449,7 @@ export default function ProfilePage() {
               </p>
               {matchHistory.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-5 text-sm text-[#9AA0B4]">
-                  No hands yet. Sit at a table — wins climb the ladder; folds just close that pot.
+                  No hands yet. Sit at a table — wins and folds both count toward your win rate.
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -552,7 +552,7 @@ export default function ProfilePage() {
                     window.setTimeout(() => setNotice(null), 1800);
                   }}
                 >
-                  Reset chips
+                  Reset local progress
                 </GradientButton>
                 <GradientButton
                   className="w-full"

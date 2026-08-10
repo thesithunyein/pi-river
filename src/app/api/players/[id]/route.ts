@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ladderScore, normalizeCareerStats } from "@/lib/progressSync";
 
+const SELECT_FULL =
+  "user_id, display_name, avatar_url, xp, vip_tier, wins, hands_played, tickets_minted, total_earnings, score, profile, equipped_card_back, equipped_table_felt, equipped_frame, owned_frames, stats, match_history";
+const SELECT_SAFE =
+  "user_id, display_name, avatar_url, xp, vip_tier, wins, tickets_minted, total_earnings, score, profile, equipped_card_back, equipped_table_felt, stats, match_history";
+
 /** Public player card for ladder clicks (Google progress row). */
 export async function GET(
   _req: Request,
@@ -24,13 +29,21 @@ export async function GET(
     return NextResponse.json({ ok: false, error: "Sign in required" }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("player_progress")
-    .select(
-      "user_id, display_name, avatar_url, xp, vip_tier, wins, hands_played, tickets_minted, total_earnings, score, profile, equipped_card_back, equipped_table_felt, equipped_frame, owned_frames, stats, match_history"
-    )
+    .select(SELECT_FULL)
     .eq("user_id", id)
     .maybeSingle();
+
+  if (error && /equipped_frame|owned_frames|hands_played|column .* does not exist|schema cache/i.test(error.message)) {
+    const retry = await supabase
+      .from("player_progress")
+      .select(SELECT_SAFE)
+      .eq("user_id", id)
+      .maybeSingle();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     return NextResponse.json({
@@ -100,7 +113,7 @@ export async function GET(
       vipTier: typeof row.vip_tier === "string" ? row.vip_tier : "Bronze",
       wins,
       tickets,
-      score: Number(row.score) || ladderScore(wins, tickets, earnings),
+      score: ladderScore(wins, tickets, earnings),
       handsPlayed: career.handsPlayed,
       biggestWin: career.biggestWin,
       cardBack: typeof row.equipped_card_back === "string" ? row.equipped_card_back : "classic",

@@ -6,6 +6,8 @@ export type LadderEntry = {
   wins: number;
   tickets: number;
   score: number;
+  /** Optional career volume for public modals / win-rate. */
+  handsPlayed?: number;
   avatarId?: string;
   avatarUrl?: string;
   usePresetAvatar?: boolean;

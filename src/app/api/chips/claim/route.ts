@@ -147,10 +147,10 @@ async function creditChipsToProgress(
 }
 
 function resolvePack(packId: string | undefined, paidWei: bigint): ChipPackDef | null {
-  const byId = chipPackById(String(packId || ""));
-  if (byId && paidWei >= byId.ethWei) return byId;
+  // Always credit the highest pack the paid wei covers — never under-credit via a cheaper packId.
   const byWei = chipPackForWei(paidWei);
-  return byWei || byId || null;
+  if (byWei) return byWei;
+  return chipPackById(String(packId || "")) || null;
 }
 
 /**

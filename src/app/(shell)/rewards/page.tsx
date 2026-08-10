@@ -52,6 +52,7 @@ export default function RewardsPage() {
     ticketsMinted,
     consumeMegapotCredit,
     markTicketMinted,
+    flushCloudProgress,
     stats,
   } = useGame();
   const { googleUser } = useAuthGate();
@@ -102,6 +103,7 @@ export default function RewardsPage() {
         error?: string;
         txHash?: string;
         pool?: PoolState;
+        megapotCredits?: number;
       };
       if (!res.ok) {
         const msg = data.error || "Claim failed.";
@@ -114,6 +116,7 @@ export default function RewardsPage() {
       }
       consumeMegapotCredit();
       markTicketMinted();
+      void flushCloudProgress();
       if (data.pool) setPool(data.pool);
       else refreshPool();
       if (data.txHash) setLastClaimTx(data.txHash);

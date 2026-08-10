@@ -650,6 +650,8 @@ export default function OnchainTablePage() {
   const stage = table?.stage ?? -1;
   const botActGen = useRef(0);
   const autoShowdownKey = useRef<string>("");
+  const prevHandLive = useRef(false);
+  const [botRetryTick, setBotRetryTick] = useState(0);
 
   // River Bot auto-act — never leave botActing stuck after cancel/remount
   useEffect(() => {
@@ -672,6 +674,7 @@ export default function OnchainTablePage() {
     setLog(botLevel >= 3 ? "River Bot snaps back…" : "River Bot is acting…");
 
     void (async () => {
+      let failed = false;
       try {
         const res = await fetch("/api/bot/act", {
           method: "POST",
@@ -685,10 +688,12 @@ export default function OnchainTablePage() {
         if (gen !== botActGen.current) return;
         const data = (await res.json()) as { action?: string; skipped?: boolean; error?: string };
         if (!res.ok) {
-          setLog(data.error || "Bot missed that beat. Tap Refresh.");
-          setBanner(data.error || "Bot missed that beat. Tap Refresh.");
+          failed = true;
+          setLog(data.error || "Bot missed that beat — retrying…");
+          setBanner(data.error || "Bot missed that beat — retrying…");
         } else if (data.skipped) {
           setLog("Waiting on the table…");
+          failed = true;
         } else {
           sound.playChip();
           if (data.action === "raise") setLog(pickLine(BOT_LINES.raise));
@@ -704,6 +709,7 @@ export default function OnchainTablePage() {
               recordHandResult(true, chips, "River Bot", "Opponent folded");
               setBanner(`River Bot folds — you take the pot. +${gained} ticket.`);
               celebrateHand(true, "Opponent folds", `+${chips.toLocaleString()} chips`, gained, shown);
+              handStartStack.current = null;
             } else {
               setBanner("River Bot folds — pot is yours.");
               celebrateHand(true, "Opponent folds", "Deal again when ready", 0, shown);
@@ -713,31 +719,37 @@ export default function OnchainTablePage() {
         }
         if (gen === botActGen.current) await refresh();
       } catch {
+        failed = true;
         if (gen === botActGen.current) {
           setLog("Bot hiccup. Retrying…");
-          setBanner("Bot hiccup — tapping again in a moment.");
+          setBanner("Bot hiccup — retrying in a moment.");
         }
       } finally {
         if (gen === botActGen.current) {
           setBotThinking(false);
           botActing.current = false;
+          if (failed) {
+            window.setTimeout(() => {
+              setBotRetryTick((n) => n + 1);
+            }, 1600);
+          }
         }
       }
     })();
 
-    // Watchdog: if bot never unlocks, force retry on next tick
+    // Watchdog: unlock + bump retry so the effect re-fires act
     const watchdog = window.setTimeout(() => {
       if (botActGen.current === gen && botActing.current) {
         botActing.current = false;
         setBotThinking(false);
-        setLog("Bot stalled. Refreshing…");
+        setLog("Bot stalled — retrying…");
         void refresh();
+        setBotRetryTick((n) => n + 1);
       }
-    }, 25000);
+    }, 18000);
 
     return () => {
       window.clearTimeout(watchdog);
-      // Bump gen so in-flight response is ignored, but unlock for a fresh attempt
       if (botActGen.current === gen) {
         botActGen.current += 1;
         botActing.current = false;
@@ -745,7 +757,7 @@ export default function OnchainTablePage() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vsBot, botAddress, toActKey, handLive, stage, tableId]);
+  }, [vsBot, botAddress, toActKey, handLive, stage, tableId, botRetryTick]);
 
   // Vs bot: auto settle at showdown so Check/Call/Raise hands finish.
   // Must re-run when `acting` clears — river Call often sets stage=5 while acting is still true.
@@ -862,13 +874,15 @@ export default function OnchainTablePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vsBot, table, tableId, refresh, holdDeal, handFx]);
 
-  // Capture your stack when a hand starts — keep until scored (don't clear on settle)
+  // Rising edge of handLive = new hand → always reset scoring refs (fixes auto-deal after folds)
   useEffect(() => {
     if (!table || !me) return;
-    if (table.handLive && handStartStack.current === null) {
+    const live = Boolean(table.handLive);
+    if (live && !prevHandLive.current) {
       handStartStack.current = me.stack;
       awardedHand.current = false;
     }
+    prevHandLive.current = live;
   }, [table?.handLive, me?.stack, table, me]);
 
   // Friend (or bot) fold-win when opponent folds and hand settles
@@ -1590,6 +1604,8 @@ export default function OnchainTablePage() {
         setLog("You lost this hand.");
         celebrateHand(false, "Showdown loss", `−${chips.toLocaleString()} chips this pot`, 0, shownOpp);
       } else {
+        // Chop still counts as a hand for win-rate volume (0 delta, streak unchanged).
+        recordHandResult(false, 0, vsBot ? "River Bot" : "Friend", "Showdown chop");
         setBanner("Chop / no change. Deal again.");
         setLog("Stacks unchanged.");
       }

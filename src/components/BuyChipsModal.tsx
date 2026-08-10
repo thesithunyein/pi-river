@@ -446,7 +446,7 @@ export function BuyChipsModal({ open, onClose }: Props) {
     setPhase("checking");
     setStatusLine("Checking MetaMask Base Sepolia balance…");
 
-    if (have > 0n && have < need) {
+    if (have < need) {
       setPhase("error");
       setError(
         `MetaMask has ${shortEth(have)} ETH on Base Sepolia — need ~${shortEth(need)} for this pack + gas.`
@@ -483,8 +483,13 @@ export function BuyChipsModal({ open, onClose }: Props) {
       setError("Paste a full 0x… hash (66 chars) from Basescan / MetaMask.");
       return;
     }
+    const pending = readPending();
+    const packHint =
+      pending && pending.txHash.toLowerCase() === raw.toLowerCase()
+        ? pending.packId
+        : selected || "boost";
     setStatusLine("Reclaiming paid transaction…");
-    await claimTx(raw as Hex, selected || "boost");
+    await claimTx(raw as Hex, packHint);
   }
 
   if (!open || !mounted) return null;

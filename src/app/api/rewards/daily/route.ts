@@ -190,6 +190,14 @@ export async function POST() {
   }
 
   if (upsert.error) {
+    // Receipt was inserted before grant — remove it so the player can retry today.
+    if (!claimInsert.error) {
+      await supabase
+        .from("daily_bonus_claims")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("day_key", dayKey);
+    }
     return NextResponse.json({ ok: false, error: upsert.error.message }, { status: 500 });
   }
 

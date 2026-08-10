@@ -1318,42 +1318,57 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     handName: string
   ) => {
     const ledger = Math.trunc(netChips);
+    const chop = !win && ledger === 0;
+
     if (win) {
       addChips(Math.max(0, ledger));
     } else if (ledger < 0) {
       setChips((prev) => Math.max(0, prev + ledger));
     }
 
-    const xpGain = xpFromHand(win, Math.abs(ledger) || (win ? 800 : 400));
+    const xpGain = xpFromHand(win, Math.abs(ledger) || (win ? 800 : chop ? 200 : 400));
     const oldLevel = getPlayerLevel(xp, stats.gamesWon);
-    const nextWins = win ? stats.gamesWon + 1 : stats.gamesWon;
-    const nextStats = {
-      handsPlayed: Math.max(stats.handsPlayed + 1, nextWins),
-      gamesWon: nextWins,
-      biggestWin: win ? Math.max(stats.biggestWin, Math.max(0, ledger)) : stats.biggestWin,
-      currentStreak: win ? stats.currentStreak + 1 : 0,
-      totalEarnings: win ? stats.totalEarnings + Math.max(0, ledger) : stats.totalEarnings,
-    };
-    const nextHistory: MatchRecord[] = [
-      {
-        opponent: opponentName,
-        result: win ? "win" : "loss",
-        hand: handName,
-        chipsDelta: win ? Math.max(0, ledger) : Math.min(0, ledger),
-        at: Date.now(),
-      },
-      ...matchHistory.slice(0, 19),
-    ];
-    // Lock stats into snapshot before logout can flush a stale payload
-    snapshotRef.current = {
-      ...snapshotRef.current,
-      stats: nextStats,
-      matchHistory: nextHistory,
-      xp: xp + xpGain,
-      vipTier: getTierForXp(xp + xpGain, nextWins),
-    };
-    setStats(nextStats);
-    setMatchHistory(nextHistory);
+    const streakAtCall = stats.currentStreak;
+
+    setStats((prev) => {
+      const nextWins = win ? prev.gamesWon + 1 : prev.gamesWon;
+      return {
+        handsPlayed: Math.max(prev.handsPlayed + 1, nextWins),
+        gamesWon: nextWins,
+        biggestWin: win ? Math.max(prev.biggestWin, Math.max(0, ledger)) : prev.biggestWin,
+        currentStreak: chop ? prev.currentStreak : win ? prev.currentStreak + 1 : 0,
+        totalEarnings: win ? prev.totalEarnings + Math.max(0, ledger) : prev.totalEarnings,
+      };
+    });
+
+    setMatchHistory((hist) => {
+      const gamesWonNext = win ? stats.gamesWon + 1 : stats.gamesWon;
+      const nextHistory: MatchRecord[] = [
+        {
+          opponent: opponentName,
+          result: win ? "win" : "loss",
+          hand: handName,
+          chipsDelta: win ? Math.max(0, ledger) : Math.min(0, ledger),
+          at: Date.now(),
+        },
+        ...hist.slice(0, 19),
+      ];
+      const nextStats = {
+        handsPlayed: Math.max(stats.handsPlayed + 1, gamesWonNext),
+        gamesWon: gamesWonNext,
+        biggestWin: win ? Math.max(stats.biggestWin, Math.max(0, ledger)) : stats.biggestWin,
+        currentStreak: chop ? streakAtCall : win ? streakAtCall + 1 : 0,
+        totalEarnings: win ? stats.totalEarnings + Math.max(0, ledger) : stats.totalEarnings,
+      };
+      snapshotRef.current = {
+        ...snapshotRef.current,
+        stats: nextStats,
+        matchHistory: nextHistory,
+        xp: xp + xpGain,
+        vipTier: getTierForXp(xp + xpGain, gamesWonNext),
+      };
+      return nextHistory;
+    });
 
     setMissionProgress((prev) => {
       const next = { ...prev };
@@ -1367,16 +1382,17 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       if (win) {
         next["win-one"] = Math.max(next["win-one"] || 0, 1);
         next["daily-win"] = Math.max(next["daily-win"] || 0, 1);
-        next["streak-two"] = Math.max(next["streak-two"] || 0, stats.currentStreak + 1);
-      } else {
+        next["streak-two"] = Math.max(next["streak-two"] || 0, streakAtCall + 1);
+      } else if (!chop) {
         next["streak-two"] = 0;
       }
       return next;
     });
 
     addXp(xpGain);
-    setVipTier(getTierForXp(xp + xpGain, nextWins));
-    if (getPlayerLevel(xp + xpGain, nextWins) > oldLevel) {
+    const gamesWonNext = win ? stats.gamesWon + 1 : stats.gamesWon;
+    setVipTier(getTierForXp(xp + xpGain, gamesWonNext));
+    if (getPlayerLevel(xp + xpGain, gamesWonNext) > oldLevel) {
       window.setTimeout(() => sound.playLevelUp(), 180);
     }
   };

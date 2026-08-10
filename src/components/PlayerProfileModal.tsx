@@ -42,7 +42,7 @@ function seedFromLadder(entry: LadderEntry, isYou: boolean): PublicPlayer {
     wins: entry.wins,
     tickets: entry.tickets,
     score: entry.score,
-    handsPlayed: 0,
+    handsPlayed: typeof entry.handsPlayed === "number" ? entry.handsPlayed : entry.wins,
     biggestWin: 0,
     isYou,
   };
