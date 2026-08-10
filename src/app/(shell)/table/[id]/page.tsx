@@ -1335,7 +1335,7 @@ export default function OnchainTablePage() {
     setBanner(null);
     try {
       setRevealOpen(true);
-      setLog("Showdown: proving your private cards on-chain…");
+      setLog("Showdown: proving private cards…");
 
       const peekWallet = walletClient ?? play.walletClient;
       if (!peekWallet) {
@@ -1344,7 +1344,6 @@ export default function OnchainTablePage() {
         return;
       }
 
-      // Settle needs many txs — top up gas before the long Inco reveal chain
       if (silent) {
         try {
           setLog("Checking play seat gas…");
@@ -1373,20 +1372,50 @@ export default function OnchainTablePage() {
           ? holePeekRef.current
           : cached ?? (await peekMyCards(peekWallet, [myHandles[0], myHandles[1]]));
       holePeekRef.current = myPeek;
+      setMyCards(myPeek.map((p) => decodeCard(p.value)));
+      sound.playCardSlide();
+
       const mySlots = isP0 ? [0, 1] : [2, 3];
-      for (let i = 0; i < 2; i++) {
-        setLog(`Submitting your card ${i + 1}/2…`);
-        const hash = await writeFn({
-          address: RIVER_HOLDEM_ADDRESS,
-          abi: riverHoldemAbi,
-          functionName: "submitShowdownCard",
-          args: [tableId, mySlots[i], myPeek[i].value, myPeek[i].sigs],
-        });
-        await waitTx(hash);
+
+      async function submitMyHoles() {
+        for (let i = 0; i < 2; i++) {
+          setLog(`Submitting your card ${i + 1}/2…`);
+          const hash = await writeFn({
+            address: RIVER_HOLDEM_ADDRESS,
+            abi: riverHoldemAbi,
+            functionName: "submitShowdownCard",
+            args: [tableId, mySlots[i], myPeek[i].value, myPeek[i].sigs],
+          });
+          await waitTx(hash);
+        }
       }
 
-      if (vsBot) {
-        setLog("River Bot is showing its cards…");
+      async function submitBotSide(): Promise<{
+        values?: Array<number | string>;
+      }> {
+        if (!vsBot) {
+          // Friend path: still need board from this client
+          setLog("Submitting board cards…");
+          const [outs, count] = (await publicClient!.readContract({
+            address: RIVER_HOLDEM_ADDRESS,
+            abi: riverHoldemAbi,
+            functionName: "getBoardHandles",
+            args: [tableId],
+          })) as readonly [readonly Hex[], number];
+          const board = await readRevealed(outs.slice(0, count) as Hex[]);
+          for (let i = 0; i < board.length; i++) {
+            const hash = await writeFn({
+              address: RIVER_HOLDEM_ADDRESS,
+              abi: riverHoldemAbi,
+              functionName: "submitShowdownCard",
+              args: [tableId, 4 + i, board[i].value, board[i].sigs],
+            });
+            await waitTx(hash);
+          }
+          return {};
+        }
+
+        setLog("River Bot is showing cards + board…");
         let botData: {
           error?: string;
           reason?: string;
@@ -1397,20 +1426,20 @@ export default function OnchainTablePage() {
         for (let attempt = 0; attempt < 2 && !botOk; attempt++) {
           if (attempt > 0) {
             setLog("Retrying River Bot showdown…");
-            await new Promise((r) => window.setTimeout(r, 700));
+            await new Promise((r) => window.setTimeout(r, 400));
           }
           const botRes = await fetch("/api/bot/showdown", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ tableId: tableId.toString() }),
           });
-          botData = (await botRes.json()) as {
-            error?: string;
-            reason?: string;
-            skipped?: boolean;
-            values?: Array<number | string>;
-          };
-          botOk = botRes.ok && !botData.skipped;
+          const text = await botRes.text();
+          try {
+            botData = text.trim() ? (JSON.parse(text) as typeof botData) : null;
+          } catch {
+            botData = { error: `Bot showdown bad response (${botRes.status})` };
+          }
+          botOk = botRes.ok && !botData?.skipped;
         }
         if (!botOk || !botData) {
           throw new Error(botData?.error || botData?.reason || "Bot could not show cards.");
@@ -1418,35 +1447,20 @@ export default function OnchainTablePage() {
         if (botData.values && botData.values.length >= 2) {
           setOppCards(botData.values.slice(0, 2).map((v) => decodeCard(BigInt(v))));
           sound.playCardSlide();
-        } else {
-          pauseAutoDeal();
-          await revealBotHoles();
         }
-        setMyCards(myPeek.map((p) => decodeCard(p.value)));
-        pauseAutoDeal(5500);
+        return botData;
       }
 
-      setLog("Submitting board cards…");
-      const [outs, count] = (await publicClient.readContract({
-        address: RIVER_HOLDEM_ADDRESS,
-        abi: riverHoldemAbi,
-        functionName: "getBoardHandles",
-        args: [tableId],
-      })) as readonly [readonly Hex[], number];
-      const board = await readRevealed(outs.slice(0, count) as Hex[]);
-      for (let i = 0; i < board.length; i++) {
-        const hash = await writeFn({
-          address: RIVER_HOLDEM_ADDRESS,
-          abi: riverHoldemAbi,
-          functionName: "submitShowdownCard",
-          args: [tableId, 4 + i, board[i].value, board[i].sigs],
-        });
-        await waitTx(hash);
+      // Player holes + bot/board in parallel → much shorter settle for demo
+      const [, botSide] = await Promise.all([submitMyHoles(), submitBotSide()]);
+      if (vsBot && (!botSide.values || botSide.values.length < 2)) {
+        pauseAutoDeal(4000);
+        await revealBotHoles();
       }
+      pauseAutoDeal(4200);
 
       await refresh();
 
-      // Bot games: one tap settles the pot so players aren't stuck on Finalize
       if (vsBot) {
         setLog("Settling the pot…");
         await finalizeShowdownSettle();
@@ -1461,7 +1475,7 @@ export default function OnchainTablePage() {
       const friendly = friendlyShowdownError(msg);
       setLog(friendly);
       setBanner(friendly);
-      autoShowdownKey.current = ""; // allow auto/manual retry
+      autoShowdownKey.current = "";
     } finally {
       showdownBusy.current = false;
       setActing(false);
@@ -1481,10 +1495,9 @@ export default function OnchainTablePage() {
     // Keep bot cards face-up through settle + result beat
     let shownOpp: DecodedCard[] = [];
     if (vsBot) {
-      pauseAutoDeal(7000);
+      pauseAutoDeal(4500);
       shownOpp = await revealBotHoles();
-      // Let the flip register before the result overlay
-      await new Promise((r) => window.setTimeout(r, 1600));
+      await new Promise((r) => window.setTimeout(r, 400));
     }
 
     await refresh();
