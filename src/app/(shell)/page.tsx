@@ -44,6 +44,17 @@ const ZERO = "0x0000000000000000000000000000000000000000";
 
 type PlayMode = "bot" | "friend";
 
+/** Avoid Firefox "JSON.parse: unexpected end of data" on empty / HTML error bodies. */
+async function readJson<T>(res: Response): Promise<T | null> {
+  const text = await res.text();
+  if (!text.trim()) return null;
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    return null;
+  }
+}
+
 function friendlyError(raw: string) {
   const msg = raw || "";
   if (/user rejected|denied|cancelled/i.test(msg)) {
@@ -128,10 +139,15 @@ export default function LobbyPage() {
   async function refreshBot() {
     try {
       const res = await fetch("/api/bot/info");
-      const data = (await res.json()) as {
+      const data = await readJson<{
         ready?: boolean;
         stuckHuman?: { tableId: string; toAct: string }[];
-      };
+      }>(res);
+      if (!data) {
+        setBotReady(false);
+        setStuckHuman([]);
+        return;
+      }
       setBotReady(Boolean(data.ready));
       setStuckHuman(data.stuckHuman ?? []);
     } catch {
@@ -176,10 +192,10 @@ export default function LobbyPage() {
     }
 
     const infoRes = await fetch("/api/bot/info");
-    const info = (await infoRes.json()) as {
+    const info = (await readJson<{
       ready?: boolean;
       stuckHuman?: { tableId: string; toAct: string }[];
-    };
+    }>(infoRes)) ?? { ready: false, stuckHuman: [] };
     setBotReady(Boolean(info.ready));
     setStuckHuman(info.stuckHuman ?? []);
 
@@ -361,8 +377,8 @@ export default function LobbyPage() {
               break;
             }
             try {
-              const body = (await joinRes.json()) as { error?: string; reason?: string };
-              lastJoinErr = body.error || body.reason || `HTTP ${joinRes.status}`;
+              const body = await readJson<{ error?: string; reason?: string }>(joinRes);
+              lastJoinErr = body?.error || body?.reason || `HTTP ${joinRes.status}`;
             } catch {
               lastJoinErr = `HTTP ${joinRes.status}`;
             }
@@ -445,8 +461,8 @@ export default function LobbyPage() {
             break;
           }
           try {
-            const body = (await joinRes.json()) as { error?: string; reason?: string };
-            lastJoinErr = body.error || body.reason || `HTTP ${joinRes.status}`;
+            const body = await readJson<{ error?: string; reason?: string }>(joinRes);
+            lastJoinErr = body?.error || body?.reason || `HTTP ${joinRes.status}`;
           } catch {
             lastJoinErr = `HTTP ${joinRes.status}`;
           }
