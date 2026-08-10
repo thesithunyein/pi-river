@@ -194,6 +194,19 @@ function EntryScreen({
             </button>
           </div>
         )}
+
+        <div className="flex flex-col items-center gap-2 pt-2">
+          <p className="text-[10px] font-bold uppercase tracking-[0.22em] text-[#7d8398]">
+            Powered by
+          </p>
+          <Image
+            src="/brand/inco-logo.png"
+            alt="Inco"
+            width={120}
+            height={28}
+            className="h-7 w-auto opacity-95"
+          />
+        </div>
       </div>
 
       <HowItWorksModal open={howOpen} onClose={() => setHowOpen(false)} />
