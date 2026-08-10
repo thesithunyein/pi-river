@@ -26,7 +26,6 @@
 | | |
 |---|---|
 | **Live app** | https://pi.sithunyein.com |
-| **Mirror** | https://mi.sithunyein.com |
 | **Network** | Base Sepolia (`84532`) |
 | **Jam** | Inco × Megapot Summer Game Jam (submit once per track) |
 
@@ -57,7 +56,7 @@ flowchart TB
 
   subgraph Auth["Identity"]
     SB["Supabase Auth<br/>Google OAuth"]
-    ID["Deterministic play wallet<br/>from user id"]
+    ID["Silent play wallet<br/>Google-bound key in browser storage"]
   end
 
   subgraph Chain["Base Sepolia"]
