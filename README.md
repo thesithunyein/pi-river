@@ -1,12 +1,10 @@
 <p align="center">
-  <img src="public/logo.svg" alt="pi River" width="160" height="160" />
+  <img src="public/brand/mi-mark.svg" alt="pi River" width="96" height="96" />
 </p>
 
 <h1 align="center">pi River</h1>
 
 <p align="center">
-  <img src="public/brand/shield-icon.svg" alt="pi River shield" width="42" height="42" />
-  &nbsp;
   <strong>Confidential Texas Hold’em on Inco Lightning + Megapot Sealed River</strong>
 </p>
 
@@ -15,10 +13,6 @@
   <a href="https://github.com/thesithunyein/pi-river"><img alt="Repo" src="https://img.shields.io/badge/GitHub-pi--river-0B1220?style=for-the-badge&logo=github" /></a>
   <a href="https://docs.inco.org"><img alt="Inco" src="https://img.shields.io/badge/Inco-Lightning-38BDF8?style=for-the-badge" /></a>
   <a href="https://docs.megapot.io"><img alt="Megapot" src="https://img.shields.io/badge/Megapot-Sealed%20River-F5C518?style=for-the-badge" /></a>
-</p>
-
-<p align="center">
-  <img src="public/brand/mi-mark.svg" alt="pi mark" width="48" height="48" />
 </p>
 
 **pi River** is a production-style heads-up poker product: Google sign-in, silent Base Sepolia play wallets, **Inco-encrypted hole cards**, fun-chip progression, cosmetics shop, club chat, and real **Megapot** ticket claims — one live URL for both jam tracks.
@@ -157,11 +151,8 @@ flowchart LR
 ```text
 pi-river/
 ├── public/
-│   ├── logo.svg                 # App logo (hero / README)
 │   ├── brand/
-│   │   ├── shield-icon.svg      # Product shield mark
-│   │   ├── mi-mark.svg          # Wordmark tile
-│   │   ├── mi-logo.svg
+│   │   ├── mi-mark.svg          # App logo (favicon / README)
 │   │   └── …
 │   ├── frames/                  # Avatar ornate frames
 │   ├── stickers/                # Shop / chat stickers
@@ -224,14 +215,9 @@ Fun chips / shop cosmetics are progression. Table buy-in + Megapot tickets are o
 
 ---
 
-## Brand assets
+## Brand
 
-| Asset | Path |
-|---|---|
-| App logo | [`public/logo.svg`](public/logo.svg) |
-| Shield icon | [`public/brand/shield-icon.svg`](public/brand/shield-icon.svg) |
-| Mark | [`public/brand/mi-mark.svg`](public/brand/mi-mark.svg) |
-| Logo wordmark | [`public/brand/mi-logo.svg`](public/brand/mi-logo.svg) |
+App logo (same as in-app / favicon): [`public/brand/mi-mark.svg`](public/brand/mi-mark.svg)
 
 ---
 
@@ -255,6 +241,5 @@ Summer Game Jam week (Aug 2026). Dual-track product on **one** URL — submit se
 ---
 
 <p align="center">
-  <img src="public/brand/shield-icon.svg" width="28" height="28" alt="" />
-  &nbsp;Built with Inco Lightning · Megapot · Base Sepolia · Supabase · Next.js
+  Built with Inco Lightning · Megapot · Base Sepolia · Supabase · Next.js
 </p>
