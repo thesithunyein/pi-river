@@ -14,6 +14,12 @@ const storage =
 export const wagmiConfig = createConfig({
   chains: [baseSepolia],
   connectors: [
+    // Prefer MetaMask when multiple injected wallets exist (Coinbase, Rabby, etc.).
+    injected({
+      shimDisconnect: true,
+      unstable_shimAsyncInject: 2_000,
+      target: "metaMask",
+    }),
     injected({
       shimDisconnect: true,
       unstable_shimAsyncInject: 2_000,

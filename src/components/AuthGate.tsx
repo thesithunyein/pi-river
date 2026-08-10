@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { createClient } from "@/lib/supabase/client";
 import type { User } from "@supabase/supabase-js";
@@ -15,8 +16,8 @@ import {
   claimWalletForGoogle,
   googleForWallet,
   pauseWalletLink,
-  readLinkedIdentity,
   resumeWalletLink,
+  unlinkGoogleWallet,
   walletForGoogleUser,
   writeLinkedIdentity,
 } from "@/lib/identity";
@@ -53,14 +54,16 @@ function EntryScreen({
   googleLoading,
   walletLoading,
   googleError,
+  initialStep = "home",
 }: {
   onGoogle: () => void;
   onWallet: () => void;
   googleLoading: boolean;
   walletLoading: boolean;
   googleError: string | null;
+  initialStep?: WelcomeStep;
 }) {
-  const [step, setStep] = useState<WelcomeStep>("home");
+  const [step, setStep] = useState<WelcomeStep>(initialStep);
   const [howOpen, setHowOpen] = useState(false);
 
   return (
@@ -219,11 +222,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const { connectAsync, connectors, isPending: walletLoading } = useConnect();
   const { disconnect } = useDisconnect();
   const { flushCloudProgress } = useGame();
+  const searchParams = useSearchParams();
   const [ready, setReady] = useState(false);
   const [googleUser, setGoogleUser] = useState<User | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState<string | null>(null);
   const [rememberedWallet, setRememberedWallet] = useState<string | null>(null);
+  const [entryStep, setEntryStep] = useState<WelcomeStep>("home");
 
   useEffect(() => {
     let alive = true;
@@ -248,6 +253,19 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Surface OAuth failures from /auth/callback (previously swallowed by /auth/signin).
+  useEffect(() => {
+    const raw = searchParams.get("auth_error");
+    if (!raw) return;
+    setGoogleError(raw);
+    setEntryStep("start");
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.delete("auth_error");
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    }
+  }, [searchParams]);
+
   // Keep Google ↔ wallet link in local storage (never auto-bind a new MetaMask account)
   useEffect(() => {
     if (!googleUser && !isConnected) return;
@@ -262,17 +280,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Wallet-only session — reject if this wallet already belongs to a Google
+    // Wallet-only session — allow entry even if this browser previously mapped the wallet to Google.
     if (isConnected && address) {
       const owner = googleForWallet(address);
       if (owner) {
-        setGoogleError(
-          "This wallet is linked to a Google account. Sign in with that Google — or use a different wallet."
-        );
-        pauseWalletLink();
-        disconnect();
-        setRememberedWallet(null);
-        return;
+        unlinkGoogleWallet(owner);
       }
       writeLinkedIdentity({
         googleUserId: null,
@@ -282,7 +294,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       });
       setRememberedWallet(address.toLowerCase());
     }
-  }, [googleUser, isConnected, address, disconnect]);
+  }, [googleUser, isConnected, address]);
 
   // Intentionally no auto MetaMask reconnect after Google — keeps play popup-free.
 
@@ -294,25 +306,37 @@ export function AuthGate({ children }: { children: ReactNode }) {
     setGoogleLoading(true);
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
+      const origin = window.location.origin;
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo: `${window.location.origin}/auth/callback` },
+        options: {
+          redirectTo: `${origin}/auth/callback`,
+          queryParams: { prompt: "select_account" },
+          skipBrowserRedirect: false,
+        },
       });
       if (error) {
-        setGoogleError(error.message || "Google sign-in is not ready yet. Try a wallet instead.");
+        setGoogleError(error.message || "Google sign-in is not ready yet. Try MetaMask, or refresh.");
+        setGoogleLoading(false);
+        return;
+      }
+      // Some stub / misconfig paths return no URL — surface that instead of hanging on “Opening…”.
+      if (!data?.url && typeof window !== "undefined") {
+        setGoogleError("Google did not return a sign-in URL. Check Supabase Google provider, then retry.");
         setGoogleLoading(false);
       }
     } catch {
-      setGoogleError("Could not open Google. Try again, or continue with a wallet.");
+      setGoogleError("Could not open Google. Try again, or continue with MetaMask.");
       setGoogleLoading(false);
     }
   }
 
   async function startWallet() {
     setGoogleError(null);
-    const hasInjected =
-      typeof window !== "undefined" &&
-      Boolean((window as Window & { ethereum?: unknown }).ethereum);
+    const ethereum = typeof window !== "undefined"
+      ? (window as Window & { ethereum?: { isMetaMask?: boolean; providers?: { isMetaMask?: boolean }[] } }).ethereum
+      : undefined;
+    const hasInjected = Boolean(ethereum);
     const mobile = typeof navigator !== "undefined" && /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
     // Mobile Safari/Chrome have no injected MetaMask — open the dapp inside MetaMask
@@ -323,12 +347,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
       return;
     }
 
-    const connector = connectors.find((c) => c.id === "injected") ?? connectors[0];
+    if (!hasInjected) {
+      setGoogleError(
+        "No browser wallet found. Install MetaMask (chrome.google.com/webstore) and refresh — or Continue with Google."
+      );
+      return;
+    }
+
+    const connector =
+      connectors.find((c) => c.id === "io.metamask" || c.name?.toLowerCase().includes("metamask")) ??
+      connectors.find((c) => c.id === "injected") ??
+      connectors[0];
     if (!connector) {
       setGoogleError(
         mobile
           ? "On phone, tap Continue with Google to play. Wallet is optional."
-          : "No browser wallet found. Install MetaMask, then refresh — or continue with Google."
+          : "No wallet connector ready. Refresh, or continue with Google."
       );
       return;
     }
@@ -355,12 +389,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
       const owner = googleForWallet(addr);
       if (owner) {
-        pauseWalletLink();
-        disconnect();
-        setGoogleError(
-          "This wallet is linked to a Google account. Sign in with that Google — or use a different wallet."
-        );
-        return;
+        unlinkGoogleWallet(owner);
       }
 
       writeLinkedIdentity({
@@ -370,11 +399,16 @@ export function AuthGate({ children }: { children: ReactNode }) {
         walletPaused: false,
       });
       setRememberedWallet(addr);
-    } catch {
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "";
+      if (/rejected|denied|user refused/i.test(msg)) {
+        setGoogleError("MetaMask request cancelled. Try again, or Continue with Google.");
+        return;
+      }
       setGoogleError(
         mobile
           ? "Wallet connect failed. Tap Continue with Google to play without MetaMask."
-          : "Could not connect wallet. Try MetaMask, or continue with Google."
+          : "Could not connect wallet. Unlock MetaMask and retry, or continue with Google."
       );
     }
   }
@@ -446,6 +480,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
           googleLoading={googleLoading}
           walletLoading={walletLoading}
           googleError={googleError}
+          initialStep={entryStep}
         />
       </AuthGateContext.Provider>
     );
