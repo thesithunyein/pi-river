@@ -337,6 +337,8 @@ export default function OnchainTablePage() {
   const [revealOpen, setRevealOpen] = useState(false);
   const [poolUsdc, setPoolUsdc] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  const [peekError, setPeekError] = useState<string | null>(null);
+  const [peekRetryBusy, setPeekRetryBusy] = useState(false);
   const [wideView, setWideView] = useState(false);
   const botActing = useRef(false);
   const showdownBusy = useRef(false);
@@ -392,6 +394,47 @@ export default function OnchainTablePage() {
       return cards;
     } catch {
       return [];
+    }
+  }
+
+  async function retryDecryptHoles() {
+    if (!publicClient || !address || peekRetryBusy) return;
+    const peekWallet = walletClient ?? play.walletClient;
+    if (!peekWallet) {
+      setPeekError("Play seat missing. Refresh and sign in with Google again.");
+      setBanner("Play seat missing. Refresh and sign in with Google again.");
+      return;
+    }
+    setPeekRetryBusy(true);
+    setLog("Retrying Inco decrypt…");
+    try {
+      const handles = (await publicClient.readContract({
+        address: RIVER_HOLDEM_ADDRESS,
+        abi: riverHoldemAbi,
+        functionName: "getHoleHandles",
+        args: [tableId],
+        account: address,
+      })) as readonly [Hex, Hex];
+      if (handles[0] === (`0x${"0".repeat(64)}` as Hex)) {
+        setPeekError("No hole cards dealt yet.");
+        return;
+      }
+      clearPeekCache();
+      const peeked = await peekMyCards(peekWallet, [handles[0], handles[1]], { force: true });
+      holePeekRef.current = peeked;
+      lastHoleKey.current = `${handles[0]}|${handles[1]}`.toLowerCase();
+      setMyCards(peeked.map((p) => decodeCard(p.value)));
+      setPeekError(null);
+      setBanner(null);
+      setLog("Holes decrypted — only you can see these.");
+      sound.playCardSlide();
+    } catch (e) {
+      console.warn("retry peek failed", e);
+      setPeekError("Decrypt still failed. Tap Retry decrypt once more.");
+      setBanner("Decrypt still failed. Tap Retry decrypt once more.");
+      setLog("Inco decrypt failed again.");
+    } finally {
+      setPeekRetryBusy(false);
     }
   }
 
@@ -512,15 +555,20 @@ export default function OnchainTablePage() {
           holdDealRef.current = false;
           setHoldDeal(false);
           setOppCards([]);
+          setPeekError(null);
           if (walletClient) {
             const peeked = await peekMyCards(walletClient, [handles[0], handles[1]]);
             holePeekRef.current = peeked;
             lastHoleKey.current = holeKey;
             setMyCards(peeked.map((p) => decodeCard(p.value)));
+            setPeekError(null);
           }
         }
       } catch (e) {
         console.warn("peek failed", e);
+        setPeekError("Could not decrypt your holes with Inco. Tap Retry decrypt.");
+        setBanner("Could not decrypt your holes with Inco. Tap Retry decrypt.");
+        setLog("Inco decrypt failed — retry to show your cards.");
       }
     }
 
@@ -697,7 +745,8 @@ export default function OnchainTablePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vsBot, botAddress, toActKey, handLive, stage, tableId]);
 
-  // Vs bot: auto settle at showdown so Check/Call/Raise hands finish
+  // Vs bot: auto settle at showdown so Check/Call/Raise hands finish.
+  // Must re-run when `acting` clears — river Call often sets stage=5 while acting is still true.
   useEffect(() => {
     if (!vsBot || !table?.handLive || table.stage !== 5) return;
     if (acting || showdownBusy.current) return;
@@ -710,7 +759,7 @@ export default function OnchainTablePage() {
     }, 400);
     return () => window.clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [vsBot, table?.stage, table?.handLive, table?.pot, tableId]);
+  }, [vsBot, table?.stage, table?.handLive, table?.pot, tableId, acting]);
 
   // Keep raise-to above the live bet so Raise doesn't silently revert
   useEffect(() => {
@@ -1295,6 +1344,18 @@ export default function OnchainTablePage() {
         return;
       }
 
+      // Settle needs many txs — top up gas before the long Inco reveal chain
+      if (silent) {
+        try {
+          setLog("Checking play seat gas…");
+          await play.ensureFunded();
+        } catch (err) {
+          throw new Error(
+            err instanceof Error ? err.message : "Need a little more ETH for showdown gas."
+          );
+        }
+      }
+
       const myHandles = (await publicClient.readContract({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
@@ -1326,19 +1387,33 @@ export default function OnchainTablePage() {
 
       if (vsBot) {
         setLog("River Bot is showing its cards…");
-        const botRes = await fetch("/api/bot/showdown", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tableId: tableId.toString() }),
-        });
-        const botData = (await botRes.json()) as {
+        let botData: {
           error?: string;
           reason?: string;
           skipped?: boolean;
           values?: Array<number | string>;
-        };
-        if (!botRes.ok || botData.skipped) {
-          throw new Error(botData.error || botData.reason || "Bot could not show cards.");
+        } | null = null;
+        let botOk = false;
+        for (let attempt = 0; attempt < 2 && !botOk; attempt++) {
+          if (attempt > 0) {
+            setLog("Retrying River Bot showdown…");
+            await new Promise((r) => window.setTimeout(r, 700));
+          }
+          const botRes = await fetch("/api/bot/showdown", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ tableId: tableId.toString() }),
+          });
+          botData = (await botRes.json()) as {
+            error?: string;
+            reason?: string;
+            skipped?: boolean;
+            values?: Array<number | string>;
+          };
+          botOk = botRes.ok && !botData.skipped;
+        }
+        if (!botOk || !botData) {
+          throw new Error(botData?.error || botData?.reason || "Bot could not show cards.");
         }
         if (botData.values && botData.values.length >= 2) {
           setOppCards(botData.values.slice(0, 2).map((v) => decodeCard(BigInt(v))));
@@ -1928,8 +2003,20 @@ export default function OnchainTablePage() {
                   ? table.stage === 5
                     ? "Showdown · cards revealed with Inco"
                     : "Only you can decrypt these holes"
-                  : "Sealed with Inco Lightning"}
+                  : peekError
+                    ? "Inco decrypt needs a retry"
+                    : "Sealed with Inco Lightning"}
               </p>
+            ) : null}
+            {table?.handLive && myCards.length < 2 && peekError ? (
+              <button
+                type="button"
+                disabled={peekRetryBusy || acting}
+                onClick={() => void retryDecryptHoles()}
+                className="rounded-full border border-[#F5C518]/50 bg-[#F5C518]/15 px-3 py-1 text-[11px] font-black uppercase tracking-wide text-[#F5C518] disabled:opacity-50"
+              >
+                {peekRetryBusy ? "Decrypting…" : "Retry decrypt"}
+              </button>
             ) : null}
             <div
               className={cn(

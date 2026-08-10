@@ -344,22 +344,41 @@ export default function LobbyPage() {
           }
           setStatus("Seating River Bot…");
           let seated = false;
-          for (let i = 0; i < 3 && !seated; i++) {
+          let lastJoinErr = "";
+          for (let i = 0; i < 5 && !seated; i++) {
             if (i > 0) {
-              setStatus(`Seating River Bot… (${i + 1}/3)`);
+              setStatus(`Seating River Bot… (${i + 1}/5)`);
               await fetch("/api/bot/wake", { method: "POST" }).catch(() => null);
-              await new Promise((r) => setTimeout(r, 280 * i));
+              await new Promise((r) => setTimeout(r, 400 * i));
             }
             const joinRes = await fetch("/api/bot/join", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ tableId: tableId.toString() }),
             });
-            seated = joinRes.ok;
+            if (joinRes.ok) {
+              seated = true;
+              break;
+            }
+            try {
+              const body = (await joinRes.json()) as { error?: string; reason?: string };
+              lastJoinErr = body.error || body.reason || `HTTP ${joinRes.status}`;
+            } catch {
+              lastJoinErr = `HTTP ${joinRes.status}`;
+            }
           }
-          if (!seated) setStatus("Table ready — finishing seat…");
+          if (!seated) {
+            setStatus(
+              lastJoinErr
+                ? `River Bot seat failed (${lastJoinErr}). Tap Play again — house faucet may need ETH.`
+                : "River Bot seat failed. Tap Play again — house faucet may need ETH."
+            );
+            // Still open the table so Retry seat can finish (buy-in already locked)
+            router.push(`/table/${tableId.toString()}?mode=bot&stake=${stake}`);
+            return;
+          }
           router.push(
-            `/table/${tableId.toString()}?mode=bot&stake=${stake}${seated ? "&seated=1" : ""}`
+            `/table/${tableId.toString()}?mode=bot&stake=${stake}&seated=1`
           );
           return;
         }
@@ -406,10 +425,15 @@ export default function LobbyPage() {
       if (mode === "bot") {
         setStatus("Seating River Bot…");
         let seated = false;
-        for (let i = 0; i < 3; i++) {
-          if (i > 0 && Date.now() - lastWakeAt.current > 20_000) {
-            await fetch("/api/bot/wake", { method: "POST" }).catch(() => null);
-            lastWakeAt.current = Date.now();
+        let lastJoinErr = "";
+        for (let i = 0; i < 5; i++) {
+          if (i > 0) {
+            setStatus(`Seating River Bot… (${i + 1}/5)`);
+            if (Date.now() - lastWakeAt.current > 8_000) {
+              await fetch("/api/bot/wake", { method: "POST" }).catch(() => null);
+              lastWakeAt.current = Date.now();
+            }
+            await new Promise((r) => setTimeout(r, 400 * i));
           }
           const joinRes = await fetch("/api/bot/join", {
             method: "POST",
@@ -420,6 +444,19 @@ export default function LobbyPage() {
             seated = true;
             break;
           }
+          try {
+            const body = (await joinRes.json()) as { error?: string; reason?: string };
+            lastJoinErr = body.error || body.reason || `HTTP ${joinRes.status}`;
+          } catch {
+            lastJoinErr = `HTTP ${joinRes.status}`;
+          }
+        }
+        if (!seated) {
+          setStatus(
+            lastJoinErr
+              ? `River Bot seat failed (${lastJoinErr}). Use Retry seat on the table.`
+              : "River Bot seat failed. Use Retry seat on the table."
+          );
         }
         router.push(
           `/table/${tableId.toString()}?mode=bot&stake=${stake}${seated ? "&seated=1" : ""}`
