@@ -128,23 +128,25 @@ export function FriendsChallengePanel({
         <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9dceb4]">
           Add friend
         </p>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-          <input
-            value={addCode}
-            onChange={(e) => setAddCode(normalizeFriendCode(e.target.value))}
-            placeholder="Their code"
-            maxLength={8}
-            className="min-h-11 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-center font-mono text-sm font-bold tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
-          />
-          <input
-            value={addName}
-            onChange={(e) => setAddName(e.target.value.slice(0, 24))}
-            placeholder="Name (optional)"
-            className="min-h-11 flex-1 rounded-xl border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
-          />
+        <div className="mt-2 grid gap-2">
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              value={addCode}
+              onChange={(e) => setAddCode(normalizeFriendCode(e.target.value))}
+              placeholder="Their code"
+              maxLength={8}
+              className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-center font-mono text-sm font-bold tracking-wider text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
+            />
+            <input
+              value={addName}
+              onChange={(e) => setAddName(e.target.value.slice(0, 24))}
+              placeholder="Name (optional)"
+              className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-sm font-semibold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
+            />
+          </div>
           <GradientButton
             variant="secondary"
-            className="min-h-11 border-white/15 bg-black/30 sm:min-w-[5.5rem]"
+            className="min-h-11 w-full border-white/15 bg-black/30"
             onClick={() => {
               const code = normalizeFriendCode(addCode);
               if (code.length < 4) {

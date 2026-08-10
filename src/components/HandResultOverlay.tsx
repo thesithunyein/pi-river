@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { sound } from "@/lib/sound";
 import { cn } from "@/lib/cn";
 import { BoltIcon, TrophyIcon } from "@/components/icons";
@@ -17,13 +18,13 @@ type Props = {
   win: boolean;
   title: string;
   subtitle?: string;
-  /** Opponent hole cards to show at settle (esp. showdown loss). */
   oppCards?: OverlayCard[];
   ticketGained?: number;
   claiming?: boolean;
   claimError?: string | null;
   onClaimTicket?: () => void;
   onContinue: () => void;
+  onHome?: () => void;
 };
 
 function MiniCard({ card }: { card: OverlayCard }) {
@@ -40,7 +41,6 @@ function MiniCard({ card }: { card: OverlayCard }) {
   );
 }
 
-/** Full-screen win/lose beat — store-app trophy energy. */
 export function HandResultOverlay({
   open,
   win,
@@ -52,11 +52,33 @@ export function HandResultOverlay({
   claimError = null,
   onClaimTicket,
   onContinue,
+  onHome,
 }: Props) {
   if (!open) return null;
 
   const canClaim = win && ticketGained > 0 && Boolean(onClaimTicket);
   const showOpp = Array.isArray(oppCards) && oppCards.length === 2;
+
+  const homeBtn = onHome ? (
+    <button
+      type="button"
+      className="w-full min-h-11 rounded-2xl border border-white/15 bg-black/30 text-sm font-bold text-white hover:border-white/25"
+      onClick={() => {
+        sound.playClick();
+        onHome();
+      }}
+    >
+      Home
+    </button>
+  ) : (
+    <Link
+      href="/"
+      className="flex w-full min-h-11 items-center justify-center rounded-2xl border border-white/15 bg-black/30 text-sm font-bold text-white hover:border-white/25"
+      onClick={() => sound.playClick()}
+    >
+      Home
+    </Link>
+  );
 
   return (
     <div
@@ -130,6 +152,9 @@ export function HandResultOverlay({
 
         {canClaim ? (
           <div className="relative mt-5 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-[#F5C518]">
+              Megapot · earned in this hand
+            </p>
             <GradientButton
               className="w-full min-h-12"
               disabled={claiming}
@@ -138,10 +163,19 @@ export function HandResultOverlay({
                 onClaimTicket?.();
               }}
             >
-              {claiming ? "Claiming…" : `Claim ${ticketGained} jackpot ticket${ticketGained === 1 ? "" : "s"}`}
+              {claiming
+                ? "Minting on Base Sepolia…"
+                : `Claim ${ticketGained} Megapot ticket${ticketGained === 1 ? "" : "s"}`}
             </GradientButton>
             {claimError ? (
-              <p className="text-[11px] font-semibold text-[#FA7185]">{claimError}</p>
+              <div className="rounded-2xl border border-[#F5C518]/25 bg-[#F5C518]/10 px-3 py-2.5 text-left">
+                <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#F5C518]">
+                  Almost there
+                </p>
+                <p className="mt-1 text-[12px] font-semibold leading-snug text-[#E8EAF2]">
+                  {claimError}
+                </p>
+              </div>
             ) : null}
             <button
               type="button"
@@ -151,19 +185,23 @@ export function HandResultOverlay({
                 onContinue();
               }}
             >
-              Later
+              Keep credit · claim later in Rewards
             </button>
+            {homeBtn}
           </div>
         ) : (
-          <GradientButton
-            className="relative mt-6 w-full min-h-12"
-            onClick={() => {
-              sound.playClick();
-              onContinue();
-            }}
-          >
-            {win ? "Deal again" : "Try again"}
-          </GradientButton>
+          <div className="relative mt-6 space-y-2">
+            <GradientButton
+              className="w-full min-h-12"
+              onClick={() => {
+                sound.playClick();
+                onContinue();
+              }}
+            >
+              {win ? "Deal again" : "Try again"}
+            </GradientButton>
+            {homeBtn}
+          </div>
         )}
       </div>
     </div>

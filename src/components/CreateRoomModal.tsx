@@ -74,10 +74,9 @@ export default function CreateRoomModal({ isOpen, onClose }: CreateRoomModalProp
               <LockIncoIcon className="h-5 w-5" />
             </span>
             <div>
-              <p className="text-sm font-bold text-river-white">Network target</p>
+              <p className="text-sm font-bold text-river-white">Inco Lightning · Base Sepolia</p>
               <p className="mt-1 text-xs leading-6 text-river-grey">
-                UI badge only for now: Inco Lightning on Base Sepolia. Wallet and contract actions are still
-                being wired.
+                Hole cards are encrypted on-chain. Only you decrypt until showdown — wire is live in Quick Play.
               </p>
             </div>
           </div>

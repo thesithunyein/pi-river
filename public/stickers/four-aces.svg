@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="256" height="256" fill="none">
+
+  <text x="64" y="40" text-anchor="middle" fill="#F5C518" font-size="28">♠</text>
+  <text x="36" y="72" text-anchor="middle" fill="#ff4d6d" font-size="28">♥</text>
+  <text x="92" y="72" text-anchor="middle" fill="#F5C518" font-size="28">♦</text>
+  <text x="64" y="104" text-anchor="middle" fill="#7dd3fc" font-size="28">♣</text>
+  <circle cx="64" cy="64" r="58" stroke="#F5C518" stroke-width="3" fill="none" opacity="0.55"/>
+
+</svg>

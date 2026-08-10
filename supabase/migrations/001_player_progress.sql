@@ -12,6 +12,7 @@ create table if not exists public.player_progress (
   equipped_table_felt text not null default 'green',
   owned_card_backs jsonb not null default '["classic"]'::jsonb,
   owned_table_felts jsonb not null default '["green"]'::jsonb,
+  owned_frames jsonb not null default '["none"]'::jsonb,
   last_daily_bonus_time bigint,
   reward_track_day integer not null default 1,
   stats jsonb not null default '{}'::jsonb,

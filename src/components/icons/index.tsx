@@ -114,12 +114,11 @@ export function UserIcon(props: IconProps) {
 export function SettingsIcon(props: IconProps) {
   return (
     <IconBase {...props}>
-      <circle cx="12" cy="12" r="3.2" fill="currentColor" />
       <path
-        d="M19.2 12.9v-1.8l-1.7-.4a6.6 6.6 0 0 0-.5-1.2l1-1.4-1.3-1.3-1.4 1a6.6 6.6 0 0 0-1.2-.5L13 4.8h-2l-.4 1.7c-.4.1-.8.3-1.2.5l-1.4-1-1.3 1.3 1 1.4c-.2.4-.4.8-.5 1.2l-1.7.4v1.8l1.7.4c.1.4.3.8.5 1.2l-1 1.4 1.3 1.3 1.4-1c.4.2.8.4 1.2.5l.4 1.7h2l.4-1.7c.4-.1.8-.3 1.2-.5l1.4 1 1.3-1.3-1-1.4c.2-.4.4-.8.5-1.2l1.7-.4Z"
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
+        fill="currentColor"
+        fillRule="evenodd"
+        clipRule="evenodd"
+        d="M11.12 3.55c.3-.9 1.46-.9 1.76 0l.4 1.2a1.5 1.5 0 0 0 1.9.96l1.22-.4c.87-.29 1.67.5 1.38 1.37l-.4 1.22a1.5 1.5 0 0 0 .96 1.9l1.2.4c.9.3.9 1.46 0 1.76l-1.2.4a1.5 1.5 0 0 0-.96 1.9l.4 1.22c.29.87-.5 1.67-1.37 1.38l-1.22-.4a1.5 1.5 0 0 0-1.9.96l-.4 1.2c-.3.9-1.46.9-1.76 0l-.4-1.2a1.5 1.5 0 0 0-1.9-.96l-1.22.4c-.87.29-1.67-.5-1.38-1.37l.4-1.22a1.5 1.5 0 0 0-.96-1.9l-1.2-.4c-.9-.3-.9-1.46 0-1.76l1.2-.4a1.5 1.5 0 0 0 .96-1.9l-.4-1.22c-.29-.87.5-1.67 1.37-1.38l1.22.4a1.5 1.5 0 0 0 1.9-.96l.4-1.2ZM12 15.15a3.15 3.15 0 1 0 0-6.3 3.15 3.15 0 0 0 0 6.3Zm0-2.05a1.1 1.1 0 1 0 0-2.2 1.1 1.1 0 0 0 0 2.2Z"
       />
     </IconBase>
   );
@@ -260,6 +259,54 @@ export function SpadeIcon(props: IconProps) {
         fill="currentColor"
       />
       <path d="M12 15.2 10.2 20.2h3.6L12 15.2Z" fill="currentColor" />
+    </IconBase>
+  );
+}
+
+export function ChatIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path
+        fill="currentColor"
+        d="M12 3.6c-4.64 0-8.4 3.12-8.4 6.96 0 2.28 1.28 4.32 3.28 5.6l-.72 2.72a.72.72 0 0 0 1.04.8l3.04-1.76c.56.08 1.16.12 1.76.12 4.64 0 8.4-3.12 8.4-6.96S16.64 3.6 12 3.6Z"
+      />
+      <circle cx="8.85" cy="10.35" r="1.05" fill="#0B0A14" fillOpacity="0.55" />
+      <circle cx="12" cy="10.35" r="1.05" fill="#0B0A14" fillOpacity="0.55" />
+      <circle cx="15.15" cy="10.35" r="1.05" fill="#0B0A14" fillOpacity="0.55" />
+    </IconBase>
+  );
+}
+
+export function ChevronIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <path
+        d="M7.2 9.4 12 14.2l4.8-4.8"
+        stroke="currentColor"
+        strokeWidth="1.9"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </IconBase>
+  );
+}
+
+export function InfoIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="12" cy="12" r="8.25" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M12 10.4v5.2" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+      <circle cx="12" cy="7.9" r="1.05" fill="currentColor" />
+    </IconBase>
+  );
+}
+
+export function MoreIcon(props: IconProps) {
+  return (
+    <IconBase {...props}>
+      <circle cx="5.5" cy="12" r="1.45" fill="currentColor" />
+      <circle cx="12" cy="12" r="1.45" fill="currentColor" />
+      <circle cx="18.5" cy="12" r="1.45" fill="currentColor" />
     </IconBase>
   );
 }

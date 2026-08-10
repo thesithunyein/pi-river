@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="256" height="256" fill="none">
+
+  <rect x="14" y="18" width="44" height="64" rx="6" fill="#f8f4ec" stroke="#F5C518" stroke-width="2" transform="rotate(-12 36 50)"/>
+  <rect x="42" y="22" width="44" height="64" rx="6" fill="#f8f4ec" stroke="#F5C518" stroke-width="2" transform="rotate(-4 64 54)"/>
+  <rect x="70" y="26" width="44" height="64" rx="6" fill="#f8f4ec" stroke="#ff4d6d" stroke-width="2" transform="rotate(8 92 58)"/>
+  <text x="64" y="112" text-anchor="middle" fill="#F5C518" font-family="Arial Black,Arial,sans-serif" font-size="14" font-weight="900">ROYAL</text>
+
+</svg>

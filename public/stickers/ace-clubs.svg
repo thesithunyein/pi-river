@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="256" height="256" fill="none">
+
+  <rect x="18" y="10" width="92" height="108" rx="12" fill="#101418" stroke="#7dd3fc" stroke-width="3"/>
+  <text x="30" y="36" fill="#7dd3fc" font-family="Georgia,serif" font-size="22" font-weight="700">A</text>
+  <circle cx="64" cy="52" r="12" fill="#7dd3fc"/>
+  <circle cx="50" cy="68" r="12" fill="#7dd3fc"/>
+  <circle cx="78" cy="68" r="12" fill="#7dd3fc"/>
+  <path d="M64 70v24M54 90h20" stroke="#7dd3fc" stroke-width="4" stroke-linecap="round"/>
+  <text x="86" y="108" fill="#7dd3fc" font-family="Georgia,serif" font-size="18" font-weight="700" transform="rotate(180 94 100)">A</text>
+
+</svg>

@@ -32,6 +32,13 @@ export type CompactCloud = {
   tm: number;
   mp: Record<string, number>;
   mcl: string[];
+  ofr?: string[];
+  osp?: string[];
+  efr?: string;
+  ach?: string[];
+  dmd?: string | null;
+  /** Lifetime chips bought via Base Sepolia packs */
+  lcb?: number;
   fr?: { c: string; n: string; id?: string }[];
   /** Recent hand log (survives login/logout without SQL) */
   mh?: CompactMatch[];
@@ -68,8 +75,8 @@ export function toCompactCloud(p: ProgressPayload): CompactCloud {
     vt: p.vipTier,
     cb: p.equippedCardBack,
     tf: p.equippedTableFelt,
-    ocb: p.ownedCardBacks?.slice(0, 12) ?? ["classic"],
-    otf: p.ownedTableFelts?.slice(0, 12) ?? ["green"],
+    ocb: p.ownedCardBacks?.slice(0, 24) ?? ["classic"],
+    otf: p.ownedTableFelts?.slice(0, 24) ?? ["green"],
     ld: p.lastDailyBonusTime,
     rd: p.rewardTrackDay,
     st: p.stats,
@@ -83,7 +90,13 @@ export function toCompactCloud(p: ProgressPayload): CompactCloud {
     mc: p.megapotCredits,
     tm: p.ticketsMinted,
     mp: p.missionProgress || {},
-    mcl: (p.missionsClaimed || []).slice(0, 20),
+    mcl: (p.missionsClaimed || []).slice(0, 40),
+    ofr: (p.ownedFrames || ["none"]).slice(0, 24),
+    osp: (p.ownedStickerPacks || []).slice(0, 24),
+    efr: p.profile?.equippedFrame || "none",
+    ach: (p.achievementsClaimed || []).slice(0, 24),
+    dmd: p.dailyMissionDay ?? null,
+    lcb: Math.max(0, Math.floor(Number(p.lifetimeChipsBought) || 0)),
     fr: (p.friends || []).slice(0, 40),
     mh: compactMatches(p.matchHistory),
   };
@@ -128,11 +141,17 @@ export function fromCompactCloud(raw: unknown): ProgressPayload | null {
       avatarId: typeof c.aid === "string" ? c.aid : undefined,
       avatarUrl: typeof c.au === "string" ? c.au : null,
       usePresetAvatar: Boolean(c.up),
+      equippedFrame: typeof c.efr === "string" ? c.efr : "none",
     },
     megapotCredits: typeof c.mc === "number" ? c.mc : 0,
     ticketsMinted: typeof c.tm === "number" ? c.tm : 0,
     missionProgress: c.mp && typeof c.mp === "object" ? c.mp : {},
     missionsClaimed: Array.isArray(c.mcl) ? c.mcl.map(String) : [],
+    ownedFrames: Array.isArray(c.ofr) && c.ofr.length ? c.ofr.map(String) : ["none"],
+    ownedStickerPacks: Array.isArray(c.osp) ? c.osp.map(String) : [],
+    achievementsClaimed: Array.isArray(c.ach) ? c.ach.map(String) : [],
+    dailyMissionDay: typeof c.dmd === "string" ? c.dmd : null,
+    lifetimeChipsBought: typeof c.lcb === "number" ? Math.max(0, Math.floor(c.lcb)) : 0,
     economyVersion: typeof c.v === "number" ? c.v : ECONOMY_VERSION,
     friends: Array.isArray(c.fr)
       ? c.fr

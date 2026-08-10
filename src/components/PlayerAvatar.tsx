@@ -3,18 +3,15 @@
 import Image from "next/image";
 import { useMemo } from "react";
 import { useAuthGate } from "@/components/AuthGate";
-import { CuteAvatar } from "@/components/CuteAvatar";
-import { AVATAR_OPTIONS, useGame } from "@/context/GameContext";
-import { cn } from "@/lib/cn";
+import { PublicPlayerAvatar } from "@/components/PublicPlayerAvatar";
+import { useGame } from "@/context/GameContext";
 
 export function usePlayerAvatarSrc() {
   const { profile } = useGame();
   const { googleUser } = useAuthGate();
 
   return useMemo(() => {
-    // Explicit cute-avatar pick always wins
     if (profile.usePresetAvatar) return null;
-    // Prefer uploaded photo, then Google
     const meta = googleUser?.user_metadata as Record<string, unknown> | undefined;
     const google =
       (typeof meta?.avatar_url === "string" && meta.avatar_url) ||
@@ -30,40 +27,30 @@ export function usePlayerAvatarSrc() {
 export function PlayerAvatar({
   className,
   size = 40,
-  showRing = false,
 }: {
   className?: string;
   size?: number;
+  /** @deprecated Frames only come from Shop purchases; ignored. */
   showRing?: boolean;
+  /** @deprecated Use equipped shop frame only; ignored if passed. Prefer omit. */
+  bare?: boolean;
 }) {
   const { profile } = useGame();
   const src = usePlayerAvatarSrc();
-  const avatar = AVATAR_OPTIONS.find((item) => item.id === profile.avatarId) ?? AVATAR_OPTIONS[0];
-
-  if (src) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={src}
-        alt={profile.displayName || "Player"}
-        width={size}
-        height={size}
-        className={cn(
-          "rounded-full object-cover shadow-[0_8px_20px_rgba(0,0,0,0.35)]",
-          showRing ? "ring-2 ring-[#F5C518]/55 ring-offset-2 ring-offset-[#0B0A14]" : "",
-          className,
-        )}
-        style={{ width: size, height: size }}
-        referrerPolicy="no-referrer"
-      />
-    );
-  }
+  // Shop only — never invent a default ornate frame for new users.
+  const frame =
+    profile.equippedFrame && profile.equippedFrame !== "none"
+      ? profile.equippedFrame
+      : "none";
 
   return (
-    <CuteAvatar
-      id={avatar.id}
+    <PublicPlayerAvatar
       size={size}
-      showRing={showRing}
+      displayName={profile.displayName}
+      avatarUrl={src}
+      avatarId={profile.avatarId}
+      usePresetAvatar={!src}
+      equippedFrame={frame}
       className={className}
     />
   );
@@ -78,7 +65,6 @@ export function BrandMark({ className }: { className?: string }) {
       width={40}
       height={40}
       className={className}
-      priority
     />
   );
 }

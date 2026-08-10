@@ -15,6 +15,8 @@ type PresenceRow = {
   score?: number;
   avatarUrl?: string;
   avatarId?: string;
+  usePresetAvatar?: boolean;
+  equippedFrame?: string;
 };
 
 /** Publishes your ladder row to Realtime presence; reports peers via callback. */
@@ -51,6 +53,9 @@ export function useLadderPresence(
           score: Number(row.score) || 0,
           avatarUrl: row.avatarUrl,
           avatarId: row.avatarId,
+          usePresetAvatar: Boolean(row.usePresetAvatar),
+          equippedFrame: row.equippedFrame || "none",
+          online: true,
           isYou: id === userId,
           isHouse: false,
         });
@@ -73,6 +78,8 @@ export function useLadderPresence(
         score: ladderScore(wins, tickets, stats.totalEarnings),
         avatarUrl: profile.usePresetAvatar ? undefined : profile.avatarUrl || undefined,
         avatarId: profile.avatarId,
+        usePresetAvatar: profile.usePresetAvatar,
+        equippedFrame: profile.equippedFrame || "none",
         at: Date.now(),
       });
     });
@@ -87,6 +94,7 @@ export function useLadderPresence(
     profile.avatarUrl,
     profile.avatarId,
     profile.usePresetAvatar,
+    profile.equippedFrame,
     stats.gamesWon,
     stats.totalEarnings,
     ticketsMinted,

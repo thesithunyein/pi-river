@@ -11,7 +11,7 @@ const TIPS = [
   {
     icon: LockIncoIcon,
     title: "Your cards stay private",
-    body: "Only you see your hole cards until showdown. Real hidden cards, not a fake flip.",
+    body: "Inco Lightning encrypts hole cards. Only you decrypt until showdown — real privacy, not a fake flip.",
   },
   {
     icon: CardsIcon,
@@ -20,8 +20,8 @@ const TIPS = [
   },
   {
     icon: TrophyIcon,
-    title: "Wins earn tickets",
-    body: "You win if they fold or your hand is better at showdown. Green banner means win. Red means lose.",
+    title: "Wins earn Megapot tickets",
+    body: "Beat the pot and you earn Megapot ticket credits. Claim them on the table or in Rewards — real Base tickets.",
   },
   {
     icon: UserIcon,

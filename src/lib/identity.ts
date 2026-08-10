@@ -68,15 +68,54 @@ export function writeLinkedIdentity(patch: Partial<LinkedIdentity>) {
     updatedAt: Date.now(),
   };
   localStorage.setItem(KEY, JSON.stringify(next));
+  return next;
+}
 
-  // Persist Google ↔ wallet mapping so re-login restores the same seat
-  if (next.googleUserId && next.walletAddress) {
-    const map = readMap();
-    map[next.googleUserId] = next.walletAddress;
-    writeMap(map);
+/** Which Google owns this wallet (if any). */
+export function googleForWallet(walletAddress: string | null | undefined): string | null {
+  if (!walletAddress) return null;
+  const wallet = walletAddress.toLowerCase();
+  const map = readMap();
+  for (const [gid, w] of Object.entries(map)) {
+    if (w?.toLowerCase() === wallet) return gid;
+  }
+  return null;
+}
+
+/**
+ * Bind wallet ↔ Google for one account.
+ * Same wallet cannot belong to two Googles; same Google can keep one wallet.
+ */
+export function claimWalletForGoogle(
+  googleUserId: string,
+  walletAddress: string
+): { ok: true } | { ok: false; reason: string } {
+  if (!googleUserId || !walletAddress) {
+    return { ok: false, reason: "Missing Google or wallet." };
+  }
+  const wallet = walletAddress.toLowerCase();
+  const map = readMap();
+  const owner = googleForWallet(wallet);
+  if (owner && owner !== googleUserId) {
+    return {
+      ok: false,
+      reason: "This wallet is already linked to another Google account. Use that Google, or a different wallet.",
+    };
   }
 
-  return next;
+  const previous = map[googleUserId];
+  if (previous && previous.toLowerCase() !== wallet) {
+    // Replacing this Google's wallet — free the old binding if it pointed here
+    // (forward map only stores one wallet per Google)
+  }
+  map[googleUserId] = wallet;
+  writeMap(map);
+  writeLinkedIdentity({
+    googleUserId,
+    walletAddress: wallet,
+    walletPaused: false,
+  });
+  return { ok: true };
 }
 
 /** Preferred wallet for this Google account (even if MetaMask is currently disconnected). */
@@ -100,7 +139,7 @@ export function resumeWalletLink() {
 export function clearLinkedIdentity() {
   if (typeof window === "undefined") return;
   localStorage.removeItem(KEY);
-  // Keep Google↔wallet map so the next Google sign-in can auto-reconnect.
+  // Keep Google↔wallet map so the next Google sign-in can restore the same wallet binding.
 }
 
 /** Forget saved wallet for this Google account (Profile → Unlink). */

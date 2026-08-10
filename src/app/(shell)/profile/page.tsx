@@ -16,9 +16,12 @@ import {
 import { useAuthGate } from "@/components/AuthGate";
 import { CuteAvatar } from "@/components/CuteAvatar";
 import { PlayerAvatar, usePlayerAvatarSrc } from "@/components/PlayerAvatar";
+import { PublicPlayerAvatar } from "@/components/PublicPlayerAvatar";
+import { PlayerProfileModal } from "@/components/PlayerProfileModal";
 import { AVATAR_OPTIONS, useGame } from "@/context/GameContext";
 import { PlayerLevelBadge } from "@/components/PlayerLevelBadge";
 import { GlassCard } from "@/components/ui/GlassCard";
+import { SoftExpand } from "@/components/ui/SoftExpand";
 import { cn } from "@/lib/cn";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -28,6 +31,7 @@ import { buildClubLadder, formatMatchChips, mergeLiveLadder, type LadderEntry } 
 import { formatRelativeTime } from "@/lib/time";
 import { useLadderPresence } from "@/hooks/useLadderPresence";
 import { getPlayAddress } from "@/lib/wallet/playWallet";
+import { sound } from "@/lib/sound";
 import { useAccount, useDisconnect } from "wagmi";
 
 export default function ProfilePage() {
@@ -58,15 +62,30 @@ export default function ProfilePage() {
   const [ladder, setLadder] = useState<LadderEntry[]>([]);
   const [ladderLive, setLadderLive] = useState(false);
   const [ladderSource, setLadderSource] = useState<"chain" | "table" | "presence" | "empty">("empty");
+  const [viewPlayerId, setViewPlayerId] = useState<string | null>(null);
+  const [viewSeed, setViewSeed] = useState<LadderEntry | null>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [ladderExpanded, setLadderExpanded] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const ladderSourceRef = useRef(ladderSource);
   ladderSourceRef.current = ladderSource;
   const presenceActiveRef = useRef(false);
   const liveAvatarSrc = usePlayerAvatarSrc();
 
-  // Presence is secondary — only fill if chain/SQL empty
+  // Presence: decorate online status on real ranks; fill board only if SQL/chain empty
   useLadderPresence((peers) => {
     if (!peers.length) return;
-    if (ladderSourceRef.current === "chain" || ladderSourceRef.current === "table") return;
+    const src = ladderSourceRef.current;
+    if (src === "chain" || src === "table") {
+      const online = new Set(peers.map((p) => p.id));
+      setLadder((prev) =>
+        prev.map((e) => ({
+          ...e,
+          online: online.has(e.id) || Boolean(e.isYou),
+        }))
+      );
+      return;
+    }
     presenceActiveRef.current = true;
     const you = {
       displayName: profile.displayName || "You",
@@ -103,47 +122,82 @@ export default function ProfilePage() {
       totalEarnings: stats.totalEarnings,
     };
     let cancelled = false;
-    void (async () => {
+
+    async function loadLadder() {
       try {
-        const res = await fetch("/api/leaderboard");
+        const res = await fetch("/api/leaderboard", { cache: "no-store" });
         const data = (await res.json()) as {
           ok?: boolean;
           entries?: LadderEntry[];
           source?: string;
+          me?: string | null;
         };
         if (cancelled) return;
         let entries = Array.isArray(data.entries) ? data.entries : [];
-        if (googleUser?.id && entries.length) {
-          try {
-            const play = getPlayAddress(googleUser.id).toLowerCase();
-            entries = entries.map((e) =>
-              e.id.toLowerCase() === play ? { ...e, isYou: true, name: you.displayName } : e
-            );
-          } catch {
-            // ignore
-          }
+        const meId = data.me || googleUser?.id || null;
+        if (entries.length) {
+          entries = entries.map((e) => {
+            const isYou =
+              Boolean(e.isYou) ||
+              Boolean(meId && e.id === meId) ||
+              (() => {
+                if (!googleUser?.id) return false;
+                try {
+                  return e.id.toLowerCase() === getPlayAddress(googleUser.id).toLowerCase();
+                } catch {
+                  return false;
+                }
+              })();
+            return isYou
+              ? {
+                  ...e,
+                  isYou: true,
+                  name: you.displayName,
+                  wins: Math.max(e.wins, you.wins),
+                  tickets: Math.max(e.tickets, you.tickets),
+                  avatarUrl: liveAvatarSrc || e.avatarUrl,
+                  avatarId: profile.avatarId || e.avatarId,
+                  usePresetAvatar: profile.usePresetAvatar,
+                  equippedFrame: profile.equippedFrame || e.equippedFrame,
+                }
+              : e;
+          });
         }
-        if (data.ok && entries.length) {
+        if (data.ok && entries.length && (data.source === "table" || data.source === "chain")) {
           setLadder(mergeLiveLadder(entries, you));
           setLadderLive(true);
           setLadderSource(data.source === "chain" ? "chain" : "table");
           return;
         }
         // Keep presence board if already live; else just you
-        if (presenceActiveRef.current) return;
+        if (presenceActiveRef.current || ladderSourceRef.current === "presence") return;
       } catch {
         // fall through
       }
-      if (!cancelled && !presenceActiveRef.current) {
+      if (!cancelled && !presenceActiveRef.current && ladderSourceRef.current !== "presence") {
         setLadder(buildClubLadder(you));
         setLadderLive(false);
         setLadderSource("empty");
       }
-    })();
+    }
+
+    void loadLadder();
+    const poll = window.setInterval(() => void loadLadder(), 15_000);
     return () => {
       cancelled = true;
+      window.clearInterval(poll);
     };
-  }, [profile.displayName, stats.gamesWon, stats.totalEarnings, ticketsMinted, googleUser?.id]);
+  }, [
+    profile.displayName,
+    profile.avatarId,
+    profile.usePresetAvatar,
+    profile.equippedFrame,
+    stats.gamesWon,
+    stats.totalEarnings,
+    ticketsMinted,
+    googleUser?.id,
+    liveAvatarSrc,
+  ]);
 
   useEffect(() => {
     if (!googleUser) return;
@@ -160,11 +214,15 @@ export default function ProfilePage() {
     if (googleName && (profile.displayName === "Player" || !profile.displayName)) {
       patch.displayName = googleName;
     }
-    // Seed name from Google; photo is read live from OAuth metadata in PlayerAvatar
-    if (Object.keys(patch).length) updateProfile(patch);
-    if (googlePic) {
-      // no-op store — avatar comes from Google metadata; ensure we don't block it with emoji avatar
+    // Persist Google photo into cloud so friends see it on the ladder
+    if (
+      googlePic &&
+      !profile.usePresetAvatar &&
+      (!profile.avatarUrl || profile.avatarUrl === googlePic || !profile.avatarUrl.startsWith("data:"))
+    ) {
+      if (profile.avatarUrl !== googlePic) patch.avatarUrl = googlePic;
     }
+    if (Object.keys(patch).length) updateProfile(patch);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleUser?.id]);
 
@@ -226,7 +284,7 @@ export default function ProfilePage() {
       <SectionHeader
         eyebrow="Your seat"
         title="Player card"
-        description="Photo, level, and career stats — your identity at the table."
+        description="Your seat at the table."
       />
 
       {notice ? (
@@ -235,15 +293,47 @@ export default function ProfilePage() {
         </div>
       ) : null}
 
-      <GlassCard accent="gold" className="space-y-5">
+      <GlassCard accent="gold" className="relative space-y-5">
+        <button
+          type="button"
+          aria-label="Settings"
+          aria-expanded={settingsOpen}
+          onClick={() => {
+            sound.playClick();
+            setSettingsOpen((v) => !v);
+          }}
+            className={cn(
+            "absolute right-3 top-3 z-10 flex h-10 w-10 items-center justify-center rounded-2xl border transition",
+            settingsOpen
+              ? "border-[#F5C518]/55 bg-[#F5C518]/18 text-[#F5C518] shadow-[0_0_18px_rgba(245,197,24,0.25)]"
+              : "border-[#F5C518]/20 bg-gradient-to-b from-[#1e1a14] to-[#0e0c12] text-[#F5C518]/85 hover:border-[#F5C518]/40 hover:text-[#F5C518]"
+          )}
+        >
+          <SettingsIcon className="h-[22px] w-[22px]" />
+        </button>
+
         <div className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <PlayerAvatar size={80} showRing />
-              <span className="absolute -bottom-1 -right-1 flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#161322] bg-[#F5C518] text-[#1A1400]">
+          <div className="flex items-center gap-4 pr-12">
+            <button
+              type="button"
+              aria-label="Edit profile photo"
+              onClick={() => {
+                sound.playClick();
+                setEditOpen(true);
+                window.setTimeout(() => {
+                  document.getElementById("edit-profile-panel")?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "start",
+                  });
+                }, 50);
+              }}
+              className="relative shrink-0 rounded-full ring-2 ring-transparent transition hover:ring-[#F5C518]/50 focus:outline-none focus-visible:ring-[#F5C518]"
+            >
+              <PlayerAvatar size={80} />
+              <span className="absolute -bottom-1 -right-1 z-[1] flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#161322] bg-[#F5C518] text-[#1A1400]">
                 <SpadeIcon className="h-4 w-4" />
               </span>
-            </div>
+            </button>
             <div className="space-y-1">
               <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#F5C518]">
                 {vipTier} tier
@@ -253,13 +343,26 @@ export default function ProfilePage() {
                 <PlayerLevelBadge xp={xp} wins={stats.gamesWon} compact />
               </div>
               <p className="text-sm text-[#9AA0B4]">{profile.bio}</p>
-              <p className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-black/30 px-2.5 py-1 text-[11px] font-semibold text-[#9AA0B4]">
+              <button
+                type="button"
+                onClick={() => {
+                  sound.playClick();
+                  setEditOpen(true);
+                  window.setTimeout(() => {
+                    document.getElementById("edit-profile-panel")?.scrollIntoView({
+                      behavior: "smooth",
+                      block: "start",
+                    });
+                  }, 50);
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full border border-[#F5C518]/35 bg-[#F5C518]/10 px-2.5 py-1 text-[11px] font-semibold text-[#F5C518] transition hover:bg-[#F5C518]/20"
+              >
                 {liveAvatarSrc
                   ? googleUser && !profile.avatarUrl
-                    ? "Photo from Google"
-                    : "Custom profile photo"
-                  : `Cute avatar · ${avatar.name}`}
-              </p>
+                    ? "Edit Google / custom photo"
+                    : "Edit profile photo"
+                  : `Edit avatar · ${avatar.name}`}
+              </button>
             </div>
           </div>
 
@@ -337,169 +440,294 @@ export default function ProfilePage() {
         <p className="text-xs leading-relaxed text-[#9AA0B4]">
           Google is enough to play — your silent seat wallet handles tables. Linking MetaMask is optional (useful on desktop).
         </p>
+
+        {settingsOpen ? (
+          <div className="animate-fade-in space-y-4 border-t border-white/10 pt-4">
+            <div>
+              <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.18em] text-[#F5C518]">
+                Match history
+              </p>
+              {matchHistory.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-5 text-sm text-[#9AA0B4]">
+                  No hands yet. Sit at a table — wins climb the ladder; folds just close that pot.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {matchHistory.map((match, index) => (
+                    <div
+                      key={`${match.at}-${match.opponent}-${index}`}
+                      className={cn(
+                        "flex items-center gap-3 rounded-2xl border px-3 py-2.5",
+                        match.result === "win"
+                          ? "border-emerald-400/25 bg-emerald-500/10"
+                          : "border-white/8 bg-black/30",
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-black uppercase tracking-wider",
+                          match.result === "win"
+                            ? "bg-emerald-400/20 text-emerald-300"
+                            : "bg-white/10 text-[#9AA0B4]",
+                        )}
+                      >
+                        {match.result === "win" ? "W" : "L"}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-black text-white">vs {match.opponent}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">
+                          {match.hand}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p
+                          className={cn(
+                            "font-mono text-sm font-black tabular-nums",
+                            match.result === "win" ? "text-emerald-300" : "text-[#9AA0B4]",
+                          )}
+                        >
+                          {formatMatchChips(match.chipsDelta, match.result, match.hand)}
+                        </p>
+                        <p className="text-[10px] font-semibold text-[#6b728a]">
+                          {formatRelativeTime(match.at, now)}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-[#9AA0B4]">
+                  <SettingsIcon className="h-5 w-5" />
+                </span>
+                <div>
+                  <p className="text-sm font-bold text-white">Audio</p>
+                  <p className="text-xs text-[#9AA0B4]">
+                    SFX for chips &amp; cards · lounge music bed (quieter on phone)
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/8 bg-black/25 px-3 py-2.5">
+                  <span className="text-xs font-bold text-white">Table SFX</span>
+                  <GradientButton
+                    variant="secondary"
+                    className="min-h-9 px-3 text-xs"
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                  >
+                    {soundEnabled ? "On" : "Off"}
+                  </GradientButton>
+                </div>
+                <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/8 bg-black/25 px-3 py-2.5">
+                  <span className="text-xs font-bold text-white">Lounge music</span>
+                  <GradientButton
+                    variant="secondary"
+                    className="min-h-9 px-3 text-xs"
+                    onClick={() => setMusicEnabled(!musicEnabled)}
+                  >
+                    {musicEnabled ? "On" : "Off"}
+                  </GradientButton>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {isConnected ? (
+                  <GradientButton
+                    variant="secondary"
+                    className="flex-1"
+                    onClick={() => disconnect()}
+                  >
+                    Unlink wallet
+                  </GradientButton>
+                ) : null}
+                <GradientButton
+                  variant="secondary"
+                  className="flex-1"
+                  onClick={() => {
+                    resetProgress();
+                    setNotice("Local progress reset.");
+                    window.setTimeout(() => setNotice(null), 1800);
+                  }}
+                >
+                  Reset chips
+                </GradientButton>
+                <GradientButton
+                  className="w-full"
+                  onClick={async () => {
+                    await logoutAll();
+                  }}
+                >
+                  Log out of pi River
+                </GradientButton>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </GlassCard>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <GlassCard className="space-y-4">
-          <div className="flex items-center gap-3">
-            <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-white/5 text-[#F5C518]">
-              <UserIcon className="h-5 w-5" />
-            </span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#F5C518]">Identity</p>
-              <h3 className="text-lg font-black text-white">Edit profile</h3>
+      <div id="edit-profile-panel">
+        <SoftExpand
+          title="Edit profile"
+          hint="Photo, name, bio, favorite hand"
+          bare
+          open={editOpen}
+          onOpenChange={setEditOpen}
+        >
+          <div className="space-y-4">
+            <div className="rounded-2xl border border-white/8 bg-[#12101c] p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
+                Profile photo
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-[#9AA0B4]">
+                {googleUser
+                  ? "Google photo shows by default. Pick a cute avatar below, or upload your own."
+                  : "Pick a cute avatar or upload a photo. It stays on this device."}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-white transition hover:bg-white/10">
+                  Upload photo
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(event) => onPickPhoto(event.target.files?.[0] ?? null)}
+                  />
+                </label>
+                {googleUser ? (
+                  <GradientButton
+                    variant="secondary"
+                    className="min-h-10 px-4 text-xs"
+                    onClick={() => {
+                      updateProfile({ avatarUrl: null, usePresetAvatar: false });
+                      setDraft((current) => ({
+                        ...current,
+                        avatarUrl: null,
+                        usePresetAvatar: false,
+                      }));
+                      setNotice("Using Google photo.");
+                      window.setTimeout(() => setNotice(null), 1800);
+                    }}
+                  >
+                    Use Google photo
+                  </GradientButton>
+                ) : null}
+                {profile.avatarUrl ? (
+                  <GradientButton
+                    variant="secondary"
+                    className="min-h-10 px-4 text-xs"
+                    onClick={() => {
+                      updateProfile({ avatarUrl: null, usePresetAvatar: true });
+                      setDraft((current) => ({
+                        ...current,
+                        avatarUrl: null,
+                        usePresetAvatar: true,
+                      }));
+                      setNotice("Back to cute avatar.");
+                      window.setTimeout(() => setNotice(null), 1800);
+                    }}
+                  >
+                    Clear custom photo
+                  </GradientButton>
+                ) : null}
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-white/8 bg-[#12101c] p-4">
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
-              Profile photo
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-[#9AA0B4]">
-              {googleUser
-                ? "Google photo shows by default. Pick a cute avatar below, or upload your own."
-                : "Pick a cute avatar or upload a photo. It stays on this device."}
-            </p>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
-              <label className="inline-flex min-h-10 cursor-pointer items-center justify-center rounded-2xl border border-white/10 bg-white/5 px-4 text-xs font-bold text-white transition hover:bg-white/10">
-                Upload photo
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
+              {AVATAR_OPTIONS.map((option) => {
+                const active = option.id === draft.avatarId && draft.usePresetAvatar;
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    className={cn(
+                      "group relative overflow-hidden rounded-[22px] border p-3 text-left transition soft-card-hover",
+                      active
+                        ? "border-[#F5C518]/50 bg-gradient-to-b from-[#3a2d0a]/90 to-[#161322] shadow-[0_12px_36px_rgba(245,197,24,0.2)]"
+                        : "border-white/10 bg-gradient-to-b from-[#1a1730] to-[#100e1a] hover:border-white/25"
+                    )}
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        avatarId: option.id,
+                        avatarUrl: null,
+                        usePresetAvatar: true,
+                      }))
+                    }
+                  >
+                    <div className="mb-3 flex items-center gap-3">
+                      <CuteAvatar id={option.id} size={56} className="rounded-2xl" showRing={active} />
+                      {active ? (
+                        <span className="rounded-full bg-[#F5C518]/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#F5C518]">
+                          Active
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="text-sm font-black text-white">{option.name}</p>
+                    <p className="mt-0.5 text-[11px] leading-snug text-[#9AA0B4]">{option.description}</p>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="grid gap-3">
+              <label className="space-y-1 text-sm">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
+                  Display name
+                </span>
                 <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(event) => onPickPhoto(event.target.files?.[0] ?? null)}
+                  type="text"
+                  value={draft.displayName}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, displayName: event.target.value }))
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-[#12101c] px-4 py-3 text-white"
+                  autoComplete="nickname"
                 />
               </label>
-              {googleUser ? (
-                <GradientButton
-                  variant="secondary"
-                  className="min-h-10 px-4 text-xs"
-                  onClick={() => {
-                    updateProfile({ avatarUrl: null, usePresetAvatar: false });
-                    setDraft((current) => ({
-                      ...current,
-                      avatarUrl: null,
-                      usePresetAvatar: false,
-                    }));
-                    setNotice("Using Google photo.");
-                    window.setTimeout(() => setNotice(null), 1800);
-                  }}
-                >
-                  Use Google photo
-                </GradientButton>
-              ) : null}
-              {profile.avatarUrl ? (
-                <GradientButton
-                  variant="secondary"
-                  className="min-h-10 px-4 text-xs"
-                  onClick={() => {
-                    updateProfile({ avatarUrl: null, usePresetAvatar: true });
-                    setDraft((current) => ({
-                      ...current,
-                      avatarUrl: null,
-                      usePresetAvatar: true,
-                    }));
-                    setNotice("Back to cute avatar.");
-                    window.setTimeout(() => setNotice(null), 1800);
-                  }}
-                >
-                  Clear custom photo
-                </GradientButton>
-              ) : null}
-            </div>
-          </div>
-
-          <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
-            {AVATAR_OPTIONS.map((option) => {
-              const active = option.id === draft.avatarId && draft.usePresetAvatar;
-              return (
-                <button
-                  key={option.id}
-                  type="button"
-                  className={cn(
-                    "group relative overflow-hidden rounded-[22px] border p-3 text-left transition soft-card-hover",
-                    active
-                      ? "border-[#F5C518]/50 bg-gradient-to-b from-[#3a2d0a]/90 to-[#161322] shadow-[0_12px_36px_rgba(245,197,24,0.2)]"
-                      : "border-white/10 bg-gradient-to-b from-[#1a1730] to-[#100e1a] hover:border-white/25"
-                  )}
-                  onClick={() =>
-                    setDraft((current) => ({
-                      ...current,
-                      avatarId: option.id,
-                      avatarUrl: null,
-                      usePresetAvatar: true,
-                    }))
+              <label className="space-y-1 text-sm">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">Bio</span>
+                <input
+                  type="text"
+                  value={draft.bio}
+                  onChange={(event) => setDraft((current) => ({ ...current, bio: event.target.value }))}
+                  className="w-full rounded-2xl border border-white/10 bg-[#12101c] px-4 py-3 text-white"
+                  autoComplete="off"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
+                  Favorite hand
+                </span>
+                <input
+                  type="text"
+                  value={draft.favHand}
+                  onChange={(event) =>
+                    setDraft((current) => ({ ...current, favHand: event.target.value }))
                   }
-                >
-                  <div className="mb-3 flex items-center gap-3">
-                    <CuteAvatar id={option.id} size={56} className="rounded-2xl" showRing={active} />
-                    {active ? (
-                      <span className="rounded-full bg-[#F5C518]/20 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-[#F5C518]">
-                        Active
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="text-sm font-black text-white">{option.name}</p>
-                  <p className="mt-0.5 text-[11px] leading-snug text-[#9AA0B4]">{option.description}</p>
-                </button>
-              );
-            })}
+                  className="w-full rounded-2xl border border-white/10 bg-[#12101c] px-4 py-3 text-white"
+                  autoComplete="off"
+                />
+              </label>
+            </div>
+
+            <GradientButton
+              onClick={() => {
+                updateProfile(draft);
+                setNotice("Profile saved.");
+                window.setTimeout(() => setNotice(null), 1800);
+              }}
+              icon={<CheckIcon className="h-4 w-4" />}
+            >
+              Save profile
+            </GradientButton>
           </div>
+        </SoftExpand>
+      </div>
 
-          <div className="grid gap-3">
-            <label className="space-y-1 text-sm">
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
-                Display name
-              </span>
-              <input
-                type="text"
-                value={draft.displayName}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, displayName: event.target.value }))
-                }
-                className="w-full rounded-2xl border border-white/10 bg-[#12101c] px-4 py-3 text-white"
-                autoComplete="nickname"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">Bio</span>
-              <input
-                type="text"
-                value={draft.bio}
-                onChange={(event) => setDraft((current) => ({ ...current, bio: event.target.value }))}
-                className="w-full rounded-2xl border border-white/10 bg-[#12101c] px-4 py-3 text-white"
-                autoComplete="off"
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#9AA0B4]">
-                Favorite hand
-              </span>
-              <input
-                type="text"
-                value={draft.favHand}
-                onChange={(event) =>
-                  setDraft((current) => ({ ...current, favHand: event.target.value }))
-                }
-                className="w-full rounded-2xl border border-white/10 bg-[#12101c] px-4 py-3 text-white"
-                autoComplete="off"
-              />
-            </label>
-          </div>
-
-          <GradientButton
-            onClick={() => {
-              updateProfile(draft);
-              setNotice("Profile saved.");
-              window.setTimeout(() => setNotice(null), 1800);
-            }}
-            icon={<CheckIcon className="h-4 w-4" />}
-          >
-            Save profile
-          </GradientButton>
-        </GlassCard>
-
-        <div className="space-y-4">
+      <div className="grid gap-4 md:grid-cols-2">
           <GlassCard className="space-y-4">
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#F5C518]/12 text-[#F5C518]">
@@ -547,119 +775,56 @@ export default function ProfilePage() {
               })}
             </div>
           </GlassCard>
-
-          <GlassCard className="space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-white/5 text-[#9AA0B4]">
-                <SettingsIcon className="h-5 w-5" />
-              </span>
-              <div>
-                <p className="text-sm font-bold text-white">Audio</p>
-                <p className="text-xs text-[#9AA0B4]">
-                  SFX for chips &amp; cards · lounge music bed (quieter on phone)
-                </p>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/8 bg-black/25 px-3 py-2.5">
-                <span className="text-xs font-bold text-white">Table SFX</span>
-                <GradientButton
-                  variant="secondary"
-                  className="min-h-9 px-3 text-xs"
-                  onClick={() => setSoundEnabled(!soundEnabled)}
-                >
-                  {soundEnabled ? "On" : "Off"}
-                </GradientButton>
-              </div>
-              <div className="flex items-center justify-between gap-2 rounded-2xl border border-white/8 bg-black/25 px-3 py-2.5">
-                <span className="text-xs font-bold text-white">Lounge music</span>
-                <GradientButton
-                  variant="secondary"
-                  className="min-h-9 px-3 text-xs"
-                  onClick={() => setMusicEnabled(!musicEnabled)}
-                >
-                  {musicEnabled ? "On" : "Off"}
-                </GradientButton>
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              {isConnected ? (
-                <GradientButton
-                  variant="secondary"
-                  className="flex-1"
-                  onClick={() => disconnect()}
-                >
-                  Unlink wallet
-                </GradientButton>
-              ) : null}
-              <GradientButton
-                variant="secondary"
-                className="flex-1"
-                onClick={() => {
-                  resetProgress();
-                  setNotice("Local progress reset.");
-                  window.setTimeout(() => setNotice(null), 1800);
-                }}
-              >
-                Reset chips
-              </GradientButton>
-              <GradientButton
-                className="w-full"
-                onClick={async () => {
-                  await logoutAll();
-                }}
-              >
-                Log out of pi River
-              </GradientButton>
-            </div>
-          </GlassCard>
-        </div>
       </div>
 
-      <GlassCard className="space-y-4 overflow-hidden border-[#F5C518]/20 bg-gradient-to-b from-[#2a2210] via-[#161322] to-[#0f0d18]">
-        <div className="relative flex items-center gap-3">
+      <GlassCard
+        accent="gold"
+        className="space-y-3 overflow-hidden border-[#F5C518]/20 bg-gradient-to-b from-[#2a2210] via-[#161322] to-[#0f0d18]"
+      >
+        <div className="flex items-center gap-3">
           <span className="flex h-12 w-12 items-center justify-center rounded-2xl border border-[#F5C518]/35 bg-[#F5C518]/15 text-[#F5C518] shadow-[0_0_24px_rgba(245,197,24,0.25)]">
             <TrophyIcon className="h-6 w-6" />
           </span>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#F5C518]">
+          <div className="min-w-0 flex-1">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#F5C518]">
               {ladderLive ? "Live club ladder" : "Club ladder"}
             </p>
-            <h3 className="text-lg font-black text-white">
+            <p className="text-sm font-semibold text-[#9AA0B4]">
               {ladderSource === "chain"
                 ? "On-chain rankings"
                 : ladderSource === "table"
                   ? "Cloud rankings"
                   : ladderSource === "presence"
-                    ? "Players online now"
+                    ? "Players online"
                     : "Your rank"}
-            </h3>
-            <p className="mt-0.5 text-[12px] text-[#9AA0B4]">
-              {ladderSource === "chain"
-                ? "Real scores on Base Sepolia (RiverClub). No house fillers."
-                : ladderSource === "table"
-                  ? "Synced from cloud progress."
-                  : ladderSource === "presence"
-                    ? "Live presence while friends are signed in."
-                    : "Play a hand — your score posts on-chain after sync."}
+              {ladder.length > 0 ? ` · Top ${Math.min(5, ladder.length)}` : ""}
             </p>
           </div>
         </div>
+
         <div className="space-y-2">
-          {ladder.map((entry, index) => (
-            <div
+          {(ladderExpanded ? ladder : ladder.slice(0, 5)).map((entry, index) => (
+            <button
+              type="button"
               key={entry.id}
+              onClick={() => {
+                if (entry.id === "you" || entry.isHouse) return;
+                sound.playClick();
+                const id = entry.isYou && googleUser?.id ? googleUser.id : entry.id;
+                setViewSeed(entry);
+                setViewPlayerId(id);
+              }}
               className={cn(
-                "flex items-center gap-3 rounded-2xl border px-3 py-2.5",
+                "flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition",
                 entry.isYou
                   ? "border-[#F5C518]/40 bg-gradient-to-r from-[#F5C518]/15 to-transparent shadow-[0_0_24px_rgba(245,197,24,0.12)]"
-                  : "border-white/8 bg-black/25",
+                  : "border-white/8 bg-black/25 hover:border-[#F5C518]/25 hover:bg-black/40",
+                entry.id === "you" || entry.isHouse ? "cursor-default" : "cursor-pointer"
               )}
             >
               <span
                 className={cn(
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-black",
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-black",
                   index === 0
                     ? "bg-gradient-to-b from-[#F5C518] to-[#E29A12] text-[#1A1400]"
                     : index === 1
@@ -672,19 +837,16 @@ export default function ProfilePage() {
                 {index + 1}
               </span>
               {entry.isYou ? (
-                <PlayerAvatar size={40} showRing />
-              ) : entry.avatarUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={entry.avatarUrl}
-                  alt=""
-                  width={40}
-                  height={40}
-                  className="h-10 w-10 rounded-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
+                <PlayerAvatar size={36} />
               ) : (
-                <CuteAvatar id={entry.avatarId ?? "felt-core"} size={40} className="rounded-full" />
+                <PublicPlayerAvatar
+                  size={36}
+                  displayName={entry.name}
+                  avatarUrl={entry.avatarUrl}
+                  avatarId={entry.avatarId}
+                  usePresetAvatar={Boolean(entry.usePresetAvatar) || !entry.avatarUrl}
+                  equippedFrame={entry.equippedFrame || "none"}
+                />
               )}
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black text-white">
@@ -697,6 +859,10 @@ export default function ProfilePage() {
                     <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">
                       House
                     </span>
+                  ) : entry.online ? (
+                    <span className="ml-2 text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                      Live
+                    </span>
                   ) : null}
                 </p>
                 <p className="text-[11px] font-semibold text-[#9AA0B4]">
@@ -706,76 +872,29 @@ export default function ProfilePage() {
               <p className="font-mono text-sm font-black tabular-nums text-[#F5C518]">
                 {entry.score.toLocaleString()}
               </p>
-            </div>
+            </button>
           ))}
         </div>
+
+        {ladder.length > 5 ? (
+          <button
+            type="button"
+            onClick={() => setLadderExpanded((v) => !v)}
+            className="w-full rounded-2xl border border-white/10 bg-black/25 py-2.5 text-xs font-black text-[#F5C518] transition hover:border-[#F5C518]/30"
+          >
+            {ladderExpanded ? "Show top 5" : `Show all ${ladder.length}`}
+          </button>
+        ) : null}
       </GlassCard>
 
-      <GlassCard accent="gold" className="space-y-4">
-        <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#F5C518]/30 bg-[#F5C518]/15 text-[#F5C518]">
-            <CardsIcon className="h-5 w-5" />
-          </span>
-          <div>
-            <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-[#F5C518]">
-              Hand log
-            </p>
-            <h3 className="text-lg font-black text-white">Your recent runs</h3>
-            <p className="text-[11px] text-[#9AA0B4]">
-              Real settled hands from this account — syncs on Google login.
-            </p>
-          </div>
-        </div>
-        {matchHistory.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/10 bg-black/25 p-6 text-sm text-[#9AA0B4]">
-            No hands yet. Sit at a table — wins climb the ladder; folds just close that pot.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {matchHistory.map((match, index) => (
-              <div
-                key={`${match.at}-${match.opponent}-${index}`}
-                className={cn(
-                  "flex items-center gap-3 rounded-2xl border px-3 py-2.5",
-                  match.result === "win"
-                    ? "border-emerald-400/25 bg-emerald-500/10"
-                    : "border-white/8 bg-black/30",
-                )}
-              >
-                <span
-                  className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-[10px] font-black uppercase tracking-wider",
-                    match.result === "win"
-                      ? "bg-emerald-400/20 text-emerald-300"
-                      : "bg-white/10 text-[#9AA0B4]",
-                  )}
-                >
-                  {match.result === "win" ? "W" : "L"}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-black text-white">vs {match.opponent}</p>
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4]">
-                    {match.hand}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p
-                    className={cn(
-                      "font-mono text-sm font-black tabular-nums",
-                      match.result === "win" ? "text-emerald-300" : "text-[#9AA0B4]",
-                    )}
-                  >
-                    {formatMatchChips(match.chipsDelta, match.result, match.hand)}
-                  </p>
-                  <p className="text-[10px] font-semibold text-[#6b728a]">
-                    {formatRelativeTime(match.at, now)}
-                  </p>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </GlassCard>
+      <PlayerProfileModal
+        playerId={viewPlayerId}
+        seed={viewSeed}
+        onClose={() => {
+          setViewPlayerId(null);
+          setViewSeed(null);
+        }}
+      />
     </PremiumPageShell>
   );
 }

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="256" height="256" fill="none">
+
+  <rect x="8" y="28" width="112" height="72" rx="18" fill="#1a1208" stroke="#F5C518" stroke-width="4"/>
+  <text x="64" y="72" text-anchor="middle" fill="#F5C518" font-family="Arial Black,Arial,sans-serif" font-size="28" font-weight="900" letter-spacing="2">ALL-IN</text>
+
+</svg>

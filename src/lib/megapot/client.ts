@@ -92,9 +92,7 @@ export async function mintMegapotTicket(recipient: Address) {
   })) as bigint;
 
   if (usdcBal < ticketPrice) {
-    throw new Error(
-      `House needs Sepolia USDC to mint Megapot tickets (have ${formatUnits(usdcBal, 6)}, need ${formatUnits(ticketPrice, 6)}).`
-    );
+    throw new Error("JACKPOT_USDC_REFILL");
   }
 
   const allowance = (await publicClient.readContract({

@@ -12,12 +12,15 @@ import { WelcomeFeltHero } from "@/components/welcome/WelcomeFeltHero";
 import { sound } from "@/lib/sound";
 import {
   clearLinkedIdentity,
+  claimWalletForGoogle,
+  googleForWallet,
   pauseWalletLink,
   readLinkedIdentity,
   resumeWalletLink,
   walletForGoogleUser,
   writeLinkedIdentity,
 } from "@/lib/identity";
+import { useGame } from "@/context/GameContext";
 
 type AuthGateContextValue = {
   ready: boolean;
@@ -108,7 +111,7 @@ function EntryScreen({
           </h1>
           <p className="mt-2 max-w-sm text-sm leading-relaxed text-[#9AA0B4]">
             {step === "home"
-              ? "Confidential heads-up Hold’em. Sit down, play, earn jackpot tickets."
+              ? "Heads-up Hold’em. Play, earn jackpot tickets."
               : "Pick how you want to join. Google is the fastest."}
           </p>
         </div>
@@ -202,6 +205,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
   const { address, isConnected, status: accountStatus } = useAccount();
   const { connectAsync, connectors, isPending: walletLoading } = useConnect();
   const { disconnect } = useDisconnect();
+  const { flushCloudProgress } = useGame();
   const [ready, setReady] = useState(false);
   const [googleUser, setGoogleUser] = useState<User | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -231,19 +235,41 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  // Keep Google ↔ wallet link in local storage
+  // Keep Google ↔ wallet link in local storage (never auto-bind a new MetaMask account)
   useEffect(() => {
     if (!googleUser && !isConnected) return;
-    const saved = walletForGoogleUser(googleUser?.id) ?? readLinkedIdentity().walletAddress;
-    writeLinkedIdentity({
-      googleUserId: googleUser?.id ?? readLinkedIdentity().googleUserId,
-      email: googleUser?.email ?? readLinkedIdentity().email,
-      ...(address ? { walletAddress: address, walletPaused: false } : {}),
-    });
-    setRememberedWallet(
-      (address ?? saved ?? readLinkedIdentity().walletAddress)?.toLowerCase() ?? null
-    );
-  }, [googleUser, isConnected, address]);
+
+    if (googleUser) {
+      writeLinkedIdentity({
+        googleUserId: googleUser.id,
+        email: googleUser.email ?? null,
+      });
+      const saved = walletForGoogleUser(googleUser.id);
+      setRememberedWallet(saved);
+      return;
+    }
+
+    // Wallet-only session — reject if this wallet already belongs to a Google
+    if (isConnected && address) {
+      const owner = googleForWallet(address);
+      if (owner) {
+        setGoogleError(
+          "This wallet is linked to a Google account. Sign in with that Google — or use a different wallet."
+        );
+        pauseWalletLink();
+        disconnect();
+        setRememberedWallet(null);
+        return;
+      }
+      writeLinkedIdentity({
+        googleUserId: null,
+        email: null,
+        walletAddress: address,
+        walletPaused: false,
+      });
+      setRememberedWallet(address.toLowerCase());
+    }
+  }, [googleUser, isConnected, address, disconnect]);
 
   // Intentionally no auto MetaMask reconnect after Google — keeps play popup-free.
 
@@ -295,7 +321,42 @@ export function AuthGate({ children }: { children: ReactNode }) {
     }
     resumeWalletLink();
     try {
-      await connectAsync({ connector });
+      const result = await connectAsync({ connector });
+      const addr = (result.accounts?.[0] || address)?.toLowerCase();
+      if (!addr) {
+        setGoogleError("Wallet connected, but no address returned. Try again.");
+        return;
+      }
+
+      if (googleUser?.id) {
+        const claim = claimWalletForGoogle(googleUser.id, addr);
+        if (!claim.ok) {
+          pauseWalletLink();
+          disconnect();
+          setGoogleError(claim.reason);
+          return;
+        }
+        setRememberedWallet(addr);
+        return;
+      }
+
+      const owner = googleForWallet(addr);
+      if (owner) {
+        pauseWalletLink();
+        disconnect();
+        setGoogleError(
+          "This wallet is linked to a Google account. Sign in with that Google — or use a different wallet."
+        );
+        return;
+      }
+
+      writeLinkedIdentity({
+        googleUserId: null,
+        email: null,
+        walletAddress: addr,
+        walletPaused: false,
+      });
+      setRememberedWallet(addr);
     } catch {
       setGoogleError(
         mobile
@@ -313,6 +374,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   async function logoutAll() {
+    try {
+      await flushCloudProgress();
+    } catch {
+      // still sign out
+    }
     await signOutGoogleOnly();
     if (isConnected) {
       pauseWalletLink();

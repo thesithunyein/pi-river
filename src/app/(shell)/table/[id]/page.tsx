@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   useAccount,
   usePublicClient,
@@ -13,9 +13,11 @@ import { formatEther, parseEther, type Hex } from "viem";
 import { BoltIcon, CardsIcon, LockIncoIcon, SpadeIcon, ZoomInIcon, ZoomOutIcon } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { PlayerAvatar } from "@/components/PlayerAvatar";
+import { PublicPlayerAvatar } from "@/components/PublicPlayerAvatar";
 import { BotAvatar } from "@/components/BotAvatar";
 import { useAuthGate } from "@/components/AuthGate";
 import { useGame } from "@/context/GameContext";
+import { useTableSeatPresence, type TableSeatProfile } from "@/hooks/useTableSeatPresence";
 import { cn } from "@/lib/cn";
 import { getCardBack, getTableFelt, cardPatternCss } from "@/lib/cosmetics";
 import {
@@ -170,6 +172,7 @@ function CardBack({
 
 export default function OnchainTablePage() {
   const params = useParams();
+  const router = useRouter();
   const search = useSearchParams();
   const modeHint = search.get("mode");
   const stakeParam = Number(search.get("stake") || "0");
@@ -246,6 +249,14 @@ export default function OnchainTablePage() {
   const [botThinking, setBotThinking] = useState(false);
   const [banner, setBanner] = useState<string | null>(null);
   const [seatingBot, setSeatingBot] = useState(false);
+  const [seatProfiles, setSeatProfiles] = useState<Record<string, TableSeatProfile>>({});
+
+  useTableSeatPresence(
+    String(params.id || ""),
+    address ?? undefined,
+    setSeatProfiles,
+    Boolean(googleUser && address && modeHint !== "bot")
+  );
   const [handFx, setHandFx] = useState<{
     win: boolean;
     title: string;
@@ -294,7 +305,12 @@ export default function OnchainTablePage() {
       });
       const data = (await res.json()) as { error?: string; txHash?: string };
       if (!res.ok) {
-        setClaimTicketError(data.error || "Claim failed.");
+        const msg = data.error || "Claim failed.";
+        setClaimTicketError(
+          /refill|USDC|usdc|JACKPOT/i.test(msg)
+            ? "Jackpot desk is refilling — your ticket credits stay saved. Try claim again in a moment."
+            : msg
+        );
         return;
       }
       consumeMegapotCredit();
@@ -1512,7 +1528,13 @@ export default function OnchainTablePage() {
 
   const opponentLabel = isBotOpponent
     ? "River Bot"
-    : shortAddr(opponent?.addr || table?.player1);
+    : opponent?.addr
+      ? seatProfiles[opponent.addr.toLowerCase()]?.name || shortAddr(opponent.addr)
+      : shortAddr(table?.player1);
+
+  const opponentSeat = opponent?.addr
+    ? seatProfiles[opponent.addr.toLowerCase()]
+    : undefined;
 
   const STREET_STEPS = ["Preflop", "Flop", "Turn", "River", "Showdown"] as const;
   // Never paint Settled (fold) as Showdown — pros notice instantly.
@@ -1557,6 +1579,11 @@ export default function OnchainTablePage() {
           setHandFx(null);
           setClaimTicketError(null);
         }}
+        onHome={() => {
+          setHandFx(null);
+          clearActiveTable();
+          router.push("/");
+        }}
       />
       <div className="flex items-center justify-between gap-3">
         <div>
@@ -1565,6 +1592,10 @@ export default function OnchainTablePage() {
           </p>
           <h1 className="text-xl font-black text-white sm:text-2xl">Table #{tableId.toString()}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#86efac]/35 bg-[#86efac]/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-[#86efac]">
+              <LockIncoIcon className="h-3.5 w-3.5" />
+              Inco · encrypted holes
+            </span>
             <PlayerLevelBadge xp={xp} wins={stats.gamesWon} compact />
             <Link
               href="/"
@@ -1618,11 +1649,28 @@ export default function OnchainTablePage() {
               Refresh
             </button>
           </div>
-          <p className="text-[10px] font-bold text-[#9dceb4]">
-            {megapotCredits > 0 ? `${megapotCredits} ticket${megapotCredits === 1 ? "" : "s"} ready` : "Win for tickets"}
-            {poolUsdc
-              ? ` · $${Number(poolUsdc).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
-              : ""}
+          <p className="max-w-[15rem] text-right text-[10px] font-bold leading-snug text-[#9dceb4]">
+            {megapotCredits > 0 ? (
+              <>
+                <span className="text-[#F5C518]">
+                  {megapotCredits} Megapot ticket{megapotCredits === 1 ? "" : "s"} ready
+                </span>
+                {poolUsdc
+                  ? ` · pool $${Number(poolUsdc).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                  : ""}
+                {" · "}
+                <Link href="/rewards" className="underline underline-offset-2 hover:text-[#F5C518]">
+                  Claim
+                </Link>
+              </>
+            ) : (
+              <>
+                Win → Megapot tickets
+                {poolUsdc
+                  ? ` · $${Number(poolUsdc).toLocaleString(undefined, { maximumFractionDigits: 0 })} pool`
+                  : ""}
+              </>
+            )}
           </p>
         </div>
       </div>
@@ -1769,9 +1817,16 @@ export default function OnchainTablePage() {
               {isBotOpponent ? (
                 <BotAvatar size={34} thinking={botThinking} />
               ) : (
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-700 text-[10px] font-black text-white">
-                  VS
-                </span>
+                <PublicPlayerAvatar
+                  size={30}
+                  displayName={opponentLabel}
+                  avatarUrl={opponentSeat?.avatarUrl}
+                  avatarId={opponentSeat?.avatarId || "felt-core"}
+                  usePresetAvatar={
+                    Boolean(opponentSeat?.usePresetAvatar) || !opponentSeat?.avatarUrl
+                  }
+                  equippedFrame={opponentSeat?.equippedFrame || "none"}
+                />
               )}
               <div className="text-left">
                 <p className="text-[11px] font-black uppercase tracking-wide text-white">{opponentLabel}</p>
@@ -1833,8 +1888,12 @@ export default function OnchainTablePage() {
                       <CardBack key={i} mark={cardStyle.mark} accent={cardStyle.accent} pattern={cardStyle.pattern} />
                     ))
                   : (
-                    <p className="text-center text-xs font-semibold text-white/45">
-                      Waiting for the flop…
+                    <p className="max-w-[14rem] text-center text-xs font-semibold leading-snug text-white/50">
+                      {myTurn
+                        ? "Hole cards only · act to open the flop"
+                        : table?.stage === 1
+                          ? "Preflop betting…"
+                          : "Board dealing…"}
                     </p>
                   )}
             </div>
@@ -1864,12 +1923,12 @@ export default function OnchainTablePage() {
               )}
             </div>
             {table?.handLive ? (
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9dceb4]/90">
+              <p className="max-w-[16rem] text-center text-[10px] font-bold uppercase tracking-[0.16em] text-[#9dceb4]/95">
                 {myCards.length === 2
                   ? table.stage === 5
-                    ? "Showdown"
-                    : "Your hand"
-                  : "Sealed"}
+                    ? "Showdown · cards revealed with Inco"
+                    : "Only you can decrypt these holes"
+                  : "Sealed with Inco Lightning"}
               </p>
             ) : null}
             <div
@@ -1880,7 +1939,7 @@ export default function OnchainTablePage() {
                   : "border-white/15 bg-black/40"
               )}
             >
-              <PlayerAvatar className="rounded-full" size={30} showRing />
+              <PlayerAvatar className="rounded-full" size={30} />
               <div>
                 <p className="text-[11px] font-black uppercase tracking-wide text-white">{displayName}</p>
                 <p className="font-mono text-[10px] text-[#c8ecd8]">
@@ -1932,6 +1991,11 @@ export default function OnchainTablePage() {
                       className="flex min-h-[52px] flex-col items-center justify-center rounded-[18px] border border-[#14532d]/40 bg-gradient-to-b from-[#4ade80] to-[#15803d] text-[13px] font-black uppercase tracking-wide text-white shadow-[0_8px_20px_rgba(21,128,61,0.4)] disabled:opacity-40"
                     >
                       {toCall > 0n ? "Call" : "Check"}
+                      {toCall > 0n ? (
+                        <span className="text-[9px] font-bold normal-case tracking-normal opacity-85">
+                          {formatStack(toCall)}
+                        </span>
+                      ) : null}
                     </button>
                     <button
                       type="button"

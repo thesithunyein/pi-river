@@ -62,9 +62,11 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ ok: true, ...minted, pool });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Megapot claim failed." },
-      { status: 500 }
-    );
+    const raw = err instanceof Error ? err.message : "Megapot claim failed.";
+    const error =
+      raw === "JACKPOT_USDC_REFILL" || /USDC|usdc/i.test(raw)
+        ? "Jackpot desk is refilling — your ticket credits stay saved. Try claim again in a moment."
+        : raw;
+    return NextResponse.json({ error, code: raw === "JACKPOT_USDC_REFILL" ? "usdc_refill" : "claim_failed" }, { status: 500 });
   }
 }

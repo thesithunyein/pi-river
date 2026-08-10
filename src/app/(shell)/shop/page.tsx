@@ -16,11 +16,18 @@ import {
   cardPatternCss,
   type CardPattern,
 } from "@/lib/cosmetics";
+import { AVATAR_FRAMES } from "@/lib/frames";
+import { STICKER_PACKS, HD_STICKERS } from "@/lib/stickers";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { PremiumChip } from "@/components/PremiumChip";
 import { PremiumPageShell } from "@/components/ui/PremiumPageShell";
+import { PublicPlayerAvatar } from "@/components/PublicPlayerAvatar";
+import { usePlayerAvatarSrc } from "@/components/PlayerAvatar";
+import { BuyChipsModal } from "@/components/BuyChipsModal";
+import { sound } from "@/lib/sound";
+import Image from "next/image";
 
 function Glyph({ kind, className }: { kind: string; className?: string }) {
   if (kind === "lock") return <LockIncoIcon className={className} />;
@@ -110,18 +117,27 @@ function FeltArt({
 export default function ShopPage() {
   const {
     chips,
-    xp,
     equippedCardBack,
     equippedTableFelt,
     ownedCardBacks,
     ownedTableFelts,
+    ownedFrames,
+    profile,
     buyCardBack,
     buyTableFelt,
+    buyFrame,
+    buyStickerPack,
     equipCardBack,
     equipTableFelt,
+    equipFrame,
+    ownedStickerPacks,
     onchainChips,
   } = useGame();
   const [notice, setNotice] = useState<string | null>(null);
+  const [tab, setTab] = useState<"deck" | "felt" | "frames" | "stickers">("deck");
+  const [showChain, setShowChain] = useState(false);
+  const [buyOpen, setBuyOpen] = useState(false);
+  const avatarSrc = usePlayerAvatarSrc();
 
   const announce = (message: string) => {
     setNotice(message);
@@ -129,11 +145,11 @@ export default function ShopPage() {
   };
 
   return (
-    <PremiumPageShell tone="gold">
+    <PremiumPageShell tone="gold" className="space-y-4">
       <SectionHeader
         eyebrow="Boutique"
         title="Style the table"
-        description="Buys spend chips; your seat burns rCHIP on-chain (not the house)."
+        description="Buy with chips. Equip what shows at the table."
       />
 
       {notice ? (
@@ -142,36 +158,68 @@ export default function ShopPage() {
         </div>
       ) : null}
 
-      <div className="relative overflow-hidden rounded-[32px] border border-[#F5C518]/25 bg-gradient-to-br from-[#3a2a08] via-[#1a1520] to-[#0d0b14] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.45)]">
-        <div className="pointer-events-none absolute -right-8 -top-10 h-40 w-40 rounded-full bg-[#F5C518]/20 blur-3xl" />
-        <div className="pointer-events-none absolute -bottom-10 left-0 h-36 w-36 rounded-full bg-emerald-500/10 blur-3xl" />
-        <div className="relative grid gap-3 sm:grid-cols-2">
-          <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-            <span className="flex h-12 w-12 items-center justify-center">
-              <PremiumChip size={48} tone="gold" />
-            </span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9AA0B4]">Your chips</p>
-              <p className="font-mono text-2xl font-black tabular-nums text-white">{chips.toLocaleString()}</p>
-              <p className="mt-1 text-[10px] font-semibold text-[#9AA0B4]">
-                {onchainChips != null
-                  ? `On-chain rCHIP: ${onchainChips.toLocaleString()}`
-                  : "On-chain rCHIP syncs after Google play"}
-              </p>
-            </div>
+      <div className="flex items-center justify-between gap-3 rounded-[22px] border border-[#F5C518]/25 bg-gradient-to-r from-[#2a2210] to-[#12101a] px-4 py-3">
+        <button
+          type="button"
+          onClick={() => {
+            sound.playClick();
+            setBuyOpen(true);
+          }}
+          className="flex items-center gap-2.5 text-left"
+          title="Buy chips with Base Sepolia ETH"
+        >
+          <PremiumChip size={36} tone="gold" />
+          <div>
+            <p className="font-mono text-xl font-black tabular-nums text-white">{chips.toLocaleString()}</p>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#F5C518]">Tap + to buy</p>
           </div>
-          <div className="flex items-center gap-3 rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#F5C518]/12 text-[#F5C518]">
-              <DiamondIcon className="h-6 w-6" />
-            </span>
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#9AA0B4]">XP</p>
-              <p className="font-mono text-2xl font-black tabular-nums text-white">{xp.toLocaleString()}</p>
-            </div>
-          </div>
+          <span className="ml-1 inline-flex h-7 w-7 items-center justify-center rounded-full bg-[#F5C518] text-lg font-black text-black">
+            +
+          </span>
+        </button>
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={() => setShowChain((v) => !v)}
+            className="text-[10px] font-bold uppercase tracking-wider text-[#9AA0B4] hover:text-[#F5C518]"
+          >
+            {showChain ? "Hide rCHIP" : "On-chain details"}
+          </button>
+          {showChain ? (
+            <p className="mt-1 max-w-[11rem] text-[10px] font-semibold leading-snug text-[#9AA0B4]">
+              {onchainChips != null
+                ? `${onchainChips.toLocaleString()} rCHIP on seat`
+                : "rCHIP syncs after Google play"}
+            </p>
+          ) : null}
         </div>
       </div>
 
+      <div className="flex gap-1 rounded-[20px] border border-white/10 bg-black/30 p-1">
+        {(
+          [
+            { id: "deck" as const, label: "Deck" },
+            { id: "felt" as const, label: "Felt" },
+            { id: "frames" as const, label: "Frames" },
+            { id: "stickers" as const, label: "HD Stickers" },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={`min-h-11 flex-1 rounded-[16px] text-[10px] font-black tracking-wide transition sm:text-xs ${
+              tab === t.id
+                ? "bg-gradient-to-b from-[#FFE08A] via-[#F5C518] to-[#E29A12] text-[#1A1400] shadow-[0_8px_20px_rgba(245,197,24,0.3)]"
+                : "text-[#9AA0B4] hover:text-white"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "deck" ? (
       <GlassCard accent="gold" className="space-y-5">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#F5C518]/25 bg-[#F5C518]/12 text-[#F5C518]">
@@ -240,7 +288,9 @@ export default function ShopPage() {
           })}
         </div>
       </GlassCard>
+      ) : null}
 
+      {tab === "felt" ? (
       <GlassCard accent="green" className="space-y-5">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-emerald-400/25 bg-emerald-400/10 text-[#86efac]">
@@ -302,6 +352,153 @@ export default function ShopPage() {
           })}
         </div>
       </GlassCard>
+      ) : null}
+
+      {tab === "frames" ? (
+      <GlassCard accent="gold" className="space-y-5 overflow-hidden border-[#F5C518]/25 bg-gradient-to-b from-[#2a2210] via-[#161322] to-[#0f0d18]">
+        <div className="flex items-center gap-3">
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl border border-[#F5C518]/25 bg-[#F5C518]/12 text-[#F5C518]">
+            <DiamondIcon className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#F5C518]">Face</p>
+            <h2 className="text-xl font-black text-white">Ornate frames</h2>
+            <p className="mt-0.5 text-[12px] text-[#9AA0B4]">Gold + gem borders for your seat photo.</p>
+          </div>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          {AVATAR_FRAMES.filter((f) => f.id !== "none").map((item) => {
+            const owned = ownedFrames.includes(item.id) || ownedFrames.some((id) => id === item.id);
+            const equipped = profile.equippedFrame === item.id;
+
+            return (
+              <div
+                key={item.id}
+                className="soft-card-hover group flex items-center gap-4 rounded-[26px] border border-[#F5C518]/15 bg-black/30 p-4 shadow-[0_12px_36px_rgba(0,0,0,0.35)] transition hover:border-[#F5C518]/35"
+              >
+                <div className="flex h-[88px] w-[88px] shrink-0 items-center justify-center rounded-2xl bg-gradient-to-b from-[#1a1430] to-[#0a0814]">
+                  <PublicPlayerAvatar
+                    size={48}
+                    displayName={profile.displayName}
+                    avatarUrl={avatarSrc}
+                    avatarId={profile.avatarId}
+                    usePresetAvatar={!avatarSrc}
+                    equippedFrame={item.id}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-black text-white">{item.name}</p>
+                  <p className="mt-1 font-mono text-xs tabular-nums text-[#F5C518]">
+                    {item.price.toLocaleString()} chips
+                  </p>
+                  <div className="mt-3">
+                    {equipped ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-[#F5C518]/30 bg-[#F5C518]/10 px-2.5 py-1 text-[11px] font-bold text-[#F5C518]">
+                        <CheckIcon className="h-3.5 w-3.5" />
+                        Active
+                      </span>
+                    ) : (
+                      <GradientButton
+                        variant={owned ? "secondary" : "primary"}
+                        className="min-h-9 px-3 py-2 text-xs"
+                        onClick={() => {
+                          if (owned) {
+                            equipFrame(item.id);
+                            announce(`${item.name} equipped.`);
+                          } else {
+                            const ok = buyFrame(item.id, item.price);
+                            announce(
+                              ok
+                                ? `${item.name} bought & equipped.`
+                                : `Need ${item.price.toLocaleString()} chips.`
+                            );
+                          }
+                        }}
+                      >
+                        {owned ? "Equip" : "Buy"}
+                      </GradientButton>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </GlassCard>
+      ) : null}
+
+      {tab === "stickers" ? (
+        <GlassCard accent="gold" className="space-y-6 overflow-hidden border-[#F5C518]/25">
+          <div className="mx-auto max-w-md text-center">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-[#F5C518]">Live chat</p>
+            <h2 className="mt-1 text-2xl font-black text-white">Premium stickers</h2>
+            <p className="mt-1 text-[13px] text-[#9AA0B4]">
+              Transparent poker HD · unlock once · send in public club chat
+            </p>
+          </div>
+
+          <div className="mx-auto grid max-w-lg gap-5">
+            {STICKER_PACKS.map((pack) => {
+              const owned = ownedStickerPacks.includes(pack.id);
+              const preview = HD_STICKERS.filter((s) => s.packId === pack.id);
+              return (
+                <div
+                  key={pack.id}
+                  className="rounded-[28px] border border-white/10 bg-gradient-to-b from-[#1c1a24] to-[#100e16] p-5 shadow-[0_16px_48px_rgba(0,0,0,0.35)]"
+                >
+                  <div className="mx-auto mb-4 grid max-w-sm grid-cols-4 gap-2">
+                    {preview.map((s) => (
+                      <div
+                        key={s.id}
+                        className="relative flex aspect-square items-center justify-center overflow-hidden rounded-2xl border border-[#F5C518]/15 bg-transparent p-1"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={s.src}
+                          alt={s.label}
+                          className="h-full w-full object-contain drop-shadow-[0_6px_12px_rgba(0,0,0,0.45)]"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mx-auto max-w-sm text-center">
+                    <p className="text-lg font-black text-white">{pack.name}</p>
+                    <p className="mt-1 text-[12px] leading-snug text-[#9AA0B4]">{pack.blurb}</p>
+                    <p className="mt-2 font-mono text-sm font-bold tabular-nums text-[#F5C518]">
+                      {pack.priceChips.toLocaleString()} chips · {pack.stickerIds.length} stickers
+                    </p>
+                    <div className="mt-4 flex justify-center">
+                      {owned ? (
+                        <span className="inline-flex items-center gap-1 rounded-full border border-[#F5C518]/30 bg-[#F5C518]/10 px-4 py-2 text-[12px] font-bold text-[#F5C518]">
+                          <CheckIcon className="h-3.5 w-3.5" />
+                          Owned — ready in chat
+                        </span>
+                      ) : (
+                        <GradientButton
+                          className="min-h-11 min-w-[140px] px-6 text-sm"
+                          onClick={() => {
+                            const ok = buyStickerPack(pack.id, pack.priceChips);
+                            announce(
+                              ok
+                                ? `${pack.name} unlocked for live chat.`
+                                : `Need ${pack.priceChips.toLocaleString()} chips.`
+                            );
+                          }}
+                        >
+                          Buy pack
+                        </GradientButton>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </GlassCard>
+      ) : null}
+
+      <BuyChipsModal open={buyOpen} onClose={() => setBuyOpen(false)} />
     </PremiumPageShell>
   );
 }

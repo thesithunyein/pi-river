@@ -12,10 +12,11 @@ import {
 import {
   BoltIcon,
   CardsIcon,
-  SpadeIcon,
+  InfoIcon,
   UserIcon,
 } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
+import { SoftExpand } from "@/components/ui/SoftExpand";
 import { RIVER_HOLDEM_ADDRESS, riverHoldemAbi } from "@/lib/contracts/riverHoldem";
 import { cn } from "@/lib/cn";
 import { forceBaseSepolia, baseSepolia } from "@/lib/wallet/forceBaseSepolia";
@@ -26,6 +27,7 @@ import { activeTableHref, clearActiveTable, readActiveTable, type ActiveTable } 
 import { PlayerLevelBadge } from "@/components/PlayerLevelBadge";
 import { PremiumChip } from "@/components/PremiumChip";
 import { PremiumPageShell } from "@/components/ui/PremiumPageShell";
+import Link from "next/link";
 import {
   challengeInviteUrl,
   pushRecentChallenge,
@@ -75,6 +77,7 @@ export default function LobbyPage() {
   const [mode, setMode] = useState<PlayMode>("bot");
   const [liveTable, setLiveTable] = useState<ActiveTable | null>(null);
   const [challengeTarget, setChallengeTarget] = useState<Friend | null>(null);
+  const [showTips, setShowTips] = useState(false);
 
   useEffect(() => {
     setLiveTable(readActiveTable());
@@ -532,30 +535,53 @@ export default function LobbyPage() {
         />
         <div className="relative mx-auto flex max-w-lg flex-col items-center text-center">
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.28em] text-[#9dceb4]">
-              Premium private heads-up
+              Private cards · real jackpot tickets
             </p>
             <h1 className="font-display text-4xl font-black leading-[1.05] text-white sm:text-5xl">
               Sit down.
               <br />
               <span className="text-[#F5C518]">Have fun.</span>
             </h1>
-            <div className="mt-4 flex justify-center gap-3">
-              <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-[#F5C518]/35 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
-                <SpadeIcon className="h-7 w-7 text-[#F5C518]" />
-              </span>
-              <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
-                <CardsIcon className="h-7 w-7 text-[#86efac]" />
-              </span>
-              <span className="relative flex h-14 w-14 items-center justify-center rounded-2xl border border-white/15 bg-black/30 shadow-[0_10px_30px_rgba(0,0,0,0.35)]">
-                <BoltIcon className="h-7 w-7 text-[#86efac]" />
-              </span>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              <p className="max-w-sm text-sm leading-relaxed text-[#b7d7c6]">
+                Inco keeps holes sealed. Wins mint Megapot tickets.
+              </p>
+              <button
+                type="button"
+                aria-label="How seats work"
+                aria-expanded={showTips}
+                onClick={() => setShowTips((v) => !v)}
+                className={cn(
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border transition",
+                  showTips
+                    ? "border-[#F5C518]/50 bg-[#F5C518]/15 text-[#F5C518]"
+                    : "border-white/15 bg-black/30 text-[#9dceb4] hover:border-white/25"
+                )}
+              >
+                <InfoIcon className="h-4 w-4" />
+              </button>
             </div>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-[#b7d7c6]">
-            Tap Play. Your cards stay private. Wins earn jackpot tickets.
-            {megapotCredits > 0
-              ? ` You have ${megapotCredits} ticket${megapotCredits === 1 ? "" : "s"} ready in Rewards.`
-              : ""}
-          </p>
+            {showTips ? (
+              <p className="mt-2 max-w-md animate-fade-in text-[12px] leading-relaxed text-[#9dceb4]">
+                Hole cards decrypt with Inco Lightning. Wins earn Megapot tickets you can mint on Base Sepolia.
+                {megapotCredits > 0 ? (
+                  <>
+                    {" "}
+                    <Link href="/rewards" className="font-bold text-[#F5C518] underline-offset-2 hover:underline">
+                      {megapotCredits} ticket{megapotCredits === 1 ? "" : "s"} ready
+                    </Link>
+                    .
+                  </>
+                ) : null}
+              </p>
+            ) : megapotCredits > 0 ? (
+              <Link
+                href="/rewards"
+                className="mt-2 text-[11px] font-black text-[#F5C518] underline-offset-2 hover:underline"
+              >
+                {megapotCredits} jackpot ticket{megapotCredits === 1 ? "" : "s"} · claim in Rewards
+              </Link>
+            ) : null}
 
           {liveTable ? (
             <div className="mt-5 w-full space-y-2 rounded-[22px] border border-[#F5C518]/35 bg-black/30 p-3 text-left shadow-[0_0_0_1px_rgba(245,197,24,0.08)]">
@@ -651,36 +677,21 @@ export default function LobbyPage() {
 
             {waiting && status ? (
               <p className="animate-pulse-soft text-[12px] font-semibold text-[#F5C518]">{status}</p>
-            ) : (
-              <p className="text-[11px] font-semibold leading-relaxed text-[#9dceb4]/90">
-                {mode === "bot"
-                  ? "No waiting room — River Bot sits as soon as the chain confirms. Seat faucet covers several hands."
-                  : "Add a friend code, tap Challenge, or share the invite link."}
-              </p>
-            )}
+            ) : null}
 
             {mode === "friend" ? (
-              <div className="w-full space-y-3">
-                <FriendsChallengePanel
-                  selectedCode={challengeTarget?.c ?? null}
-                  onSelectFriend={setChallengeTarget}
-                  onRequestChallenge={(f) => {
-                    setChallengeTarget(f);
-                    setStatus(`Opening Challenge for ${f.n}…`);
-                    void createAndMaybeInviteBot(f);
-                  }}
-                />
+              <div className="w-full space-y-3 text-left">
                 <div className="flex gap-2">
                   <input
                     value={joinId}
                     onChange={(e) => setJoinId(e.target.value.replace(/[^\d]/g, ""))}
                     placeholder="Challenge table #"
                     inputMode="numeric"
-                    className="min-h-14 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 text-center text-base font-bold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
+                    className="min-h-12 flex-1 rounded-2xl border border-white/10 bg-black/25 px-4 text-center text-base font-bold text-white outline-none placeholder:text-white/35 focus:border-[#F5C518]/50"
                   />
                   <GradientButton
                     variant="secondary"
-                    className="min-h-14 min-w-[7.5rem] border-white/15 bg-black/30"
+                    className="min-h-12 min-w-[6.5rem] border-white/15 bg-black/30"
                     icon={<CardsIcon className="h-5 w-5" />}
                     onClick={joinTable}
                     disabled={waiting}
@@ -688,12 +699,30 @@ export default function LobbyPage() {
                     Join
                   </GradientButton>
                 </div>
+
+                <SoftExpand
+                  title="Friends & codes"
+                  hint="Add friends, send challenges"
+                  defaultOpen={Boolean(challengeTarget)}
+                >
+                  <FriendsChallengePanel
+                    selectedCode={challengeTarget?.c ?? null}
+                    onSelectFriend={setChallengeTarget}
+                    onRequestChallenge={(f) => {
+                      setChallengeTarget(f);
+                      setStatus(`Opening Challenge for ${f.n}…`);
+                      void createAndMaybeInviteBot(f);
+                    }}
+                  />
+                </SoftExpand>
+
                 {recentChallenges.length > 0 ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-3 text-left">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#9dceb4]">
-                      Recent Challenges
-                    </p>
-                    <div className="mt-2 space-y-1.5">
+                  <SoftExpand
+                    title="Recent"
+                    hint="Reopen or copy invite"
+                    badge={recentChallenges.length}
+                  >
+                    <div className="space-y-1.5">
                       {recentChallenges.slice(0, 4).map((c) => (
                         <div
                           key={`${c.tableId}-${c.createdAt}`}
@@ -725,12 +754,12 @@ export default function LobbyPage() {
                               }
                             }}
                           >
-                            Copy link
+                            Copy
                           </button>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </SoftExpand>
                 ) : null}
               </div>
             ) : null}
@@ -746,9 +775,15 @@ export default function LobbyPage() {
             <p className="mt-3 text-sm font-semibold text-[#F5C518]">{status}</p>
           ) : null}
 
-          <div className="mt-5 w-full text-left">
-            <PlayerLevelBadge xp={xp} wins={stats.gamesWon} />
-          </div>
+          <Link
+            href="/profile"
+            className="mt-5 flex w-full items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/25 px-3 py-2.5 text-left transition hover:border-[#F5C518]/30"
+          >
+            <PlayerLevelBadge xp={xp} wins={stats.gamesWon} compact />
+            <span className="text-[10px] font-bold uppercase tracking-wider text-[#9dceb4]">
+              Profile
+            </span>
+          </Link>
 
           {!waiting && myStuckTables.length > 0 && botReady === false ? (
             <button

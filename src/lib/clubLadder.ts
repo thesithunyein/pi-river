@@ -8,6 +8,9 @@ export type LadderEntry = {
   score: number;
   avatarId?: string;
   avatarUrl?: string;
+  usePresetAvatar?: boolean;
+  equippedFrame?: string;
+  online?: boolean;
   isYou?: boolean;
   isHouse?: boolean;
 };
