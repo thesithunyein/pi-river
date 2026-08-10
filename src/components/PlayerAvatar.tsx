@@ -12,12 +12,14 @@ export function usePlayerAvatarSrc() {
 
   return useMemo(() => {
     if (profile.usePresetAvatar) return null;
+    // Custom upload / saved profile photo wins over Google (logout-safe)
+    if (profile.avatarUrl?.startsWith("data:")) return profile.avatarUrl;
+    if (profile.avatarUrl?.startsWith("http")) return profile.avatarUrl;
     const meta = googleUser?.user_metadata as Record<string, unknown> | undefined;
     const google =
       (typeof meta?.avatar_url === "string" && meta.avatar_url) ||
       (typeof meta?.picture === "string" && meta.picture) ||
       null;
-    if (profile.avatarUrl?.startsWith("data:")) return profile.avatarUrl;
     if (google) return google;
     if (profile.avatarUrl) return profile.avatarUrl;
     return null;

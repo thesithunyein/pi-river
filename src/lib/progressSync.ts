@@ -368,6 +368,51 @@ export function mergeMegapotCredits(
   return Math.min(i, e);
 }
 
+function mergeProfiles(
+  incoming: ProgressPayload["profile"] | undefined,
+  existing: ProgressPayload["profile"] | undefined,
+  ownedFrames: string[]
+): ProgressPayload["profile"] {
+  const a = incoming || {};
+  const b = existing || {};
+  const aFrame = typeof a.equippedFrame === "string" ? a.equippedFrame : "none";
+  const bFrame = typeof b.equippedFrame === "string" ? b.equippedFrame : "none";
+  const keepFrame =
+    aFrame !== "none" && ownedFrames.includes(aFrame)
+      ? aFrame
+      : bFrame !== "none" && ownedFrames.includes(bFrame)
+        ? bFrame
+        : ownedFrames.find((id) => id !== "none") || "none";
+
+  const aUrl = typeof a.avatarUrl === "string" ? a.avatarUrl : null;
+  const bUrl = typeof b.avatarUrl === "string" ? b.avatarUrl : null;
+  // Prefer durable http; then data; never wipe a richer avatar with empty
+  const avatarUrl =
+    (aUrl && aUrl.startsWith("http") && aUrl) ||
+    (bUrl && bUrl.startsWith("http") && bUrl) ||
+    (aUrl && aUrl.startsWith("data:") && aUrl) ||
+    (bUrl && bUrl.startsWith("data:") && bUrl) ||
+    aUrl ||
+    bUrl ||
+    null;
+
+  const usePresetAvatar = Boolean(
+    a.usePresetAvatar ?? b.usePresetAvatar ?? false
+  );
+
+  return {
+    ...b,
+    ...a,
+    displayName: (a.displayName && a.displayName !== "Player" ? a.displayName : null) ||
+      b.displayName ||
+      "Player",
+    avatarId: a.avatarId || b.avatarId || "fox",
+    avatarUrl: usePresetAvatar ? null : avatarUrl,
+    usePresetAvatar,
+    equippedFrame: keepFrame,
+  };
+}
+
 /** Prefer non-regressing career fields when saving cloud progress. */
 export function mergeProgressAgainstExisting(
   incoming: ProgressPayload,
@@ -435,6 +480,7 @@ export function mergeProgressAgainstExisting(
     rewardTrackDay,
     missionsClaimed,
     achievementsClaimed,
+    profile: mergeProfiles(incoming.profile, existing.profile, ownedFrames),
   };
   return {
     ...mergedOwnsPayload,
@@ -453,11 +499,16 @@ export function mergeProgressAgainstExisting(
 
 export function payloadToRow(userId: string, payload: ProgressPayload) {
   const wins = payload.stats?.gamesWon ?? 0;
+  const handsPlayed = Math.max(payload.stats?.handsPlayed ?? 0, wins);
   const tickets = payload.ticketsMinted ?? 0;
   const earnings = payload.stats?.totalEarnings ?? 0;
   const avatarUrl = payload.profile?.avatarUrl;
   const publicAvatar =
     typeof avatarUrl === "string" && avatarUrl.startsWith("http") ? avatarUrl : null;
+  const equippedFrame =
+    payload.profile?.equippedFrame && payload.ownedFrames?.includes(payload.profile.equippedFrame)
+      ? payload.profile.equippedFrame
+      : "none";
   return {
     user_id: userId,
     display_name: payload.profile?.displayName || "Player",
@@ -467,19 +518,25 @@ export function payloadToRow(userId: string, payload: ProgressPayload) {
     vip_tier: payload.vipTier,
     equipped_card_back: payload.equippedCardBack,
     equipped_table_felt: payload.equippedTableFelt,
+    equipped_frame: equippedFrame,
     owned_card_backs: payload.ownedCardBacks,
     owned_table_felts: payload.ownedTableFelts,
     owned_frames: payload.ownedFrames?.length ? payload.ownedFrames : ["none"],
     owned_stickers: payload.ownedStickerPacks?.length ? payload.ownedStickerPacks : [],
     last_daily_bonus_time: payload.lastDailyBonusTime,
     reward_track_day: payload.rewardTrackDay,
-    stats: payload.stats,
+    stats: {
+      ...payload.stats,
+      handsPlayed,
+      gamesWon: wins,
+    },
     match_history: payload.matchHistory?.slice(0, 20) ?? [],
     sound_enabled: payload.soundEnabled,
     music_enabled: payload.musicEnabled,
     profile: {
       ...payload.profile,
-      avatarUrl: publicAvatar ?? payload.profile?.avatarUrl ?? null,
+      avatarUrl: publicAvatar ?? (typeof avatarUrl === "string" && avatarUrl.startsWith("data:") ? avatarUrl : null),
+      equippedFrame,
       ownedFrames: payload.ownedFrames?.length ? payload.ownedFrames : ["none"],
       ownedStickerPacks: payload.ownedStickerPacks?.length ? payload.ownedStickerPacks : [],
       achievementsClaimed: payload.achievementsClaimed || [],
@@ -492,6 +549,7 @@ export function payloadToRow(userId: string, payload: ProgressPayload) {
     missions_claimed: payload.missionsClaimed,
     economy_version: payload.economyVersion ?? ECONOMY_VERSION,
     wins,
+    hands_played: handsPlayed,
     total_earnings: earnings,
     score: ladderScore(wins, tickets, earnings),
     updated_at: new Date().toISOString(),

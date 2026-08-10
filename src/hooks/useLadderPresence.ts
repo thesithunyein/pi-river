@@ -76,10 +76,21 @@ export function useLadderPresence(
         wins,
         tickets,
         score: ladderScore(wins, tickets, stats.totalEarnings),
-        avatarUrl: profile.usePresetAvatar ? undefined : profile.avatarUrl || undefined,
+        avatarUrl: profile.usePresetAvatar
+          ? undefined
+          : profile.avatarUrl?.startsWith("http") || profile.avatarUrl?.startsWith("data:")
+            ? profile.avatarUrl
+            : (typeof googleUser.user_metadata?.avatar_url === "string" &&
+                googleUser.user_metadata.avatar_url) ||
+              (typeof googleUser.user_metadata?.picture === "string" &&
+                googleUser.user_metadata.picture) ||
+              undefined,
         avatarId: profile.avatarId,
-        usePresetAvatar: profile.usePresetAvatar,
-        equippedFrame: profile.equippedFrame || "none",
+        usePresetAvatar: Boolean(profile.usePresetAvatar),
+        equippedFrame:
+          profile.equippedFrame && profile.equippedFrame !== "none"
+            ? profile.equippedFrame
+            : "none",
         at: Date.now(),
       });
     });

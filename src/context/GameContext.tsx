@@ -370,6 +370,22 @@ function readSave(accountKey: string) {
           localStorage.removeItem(walletKey);
         }
       }
+      // Fold guest progress so win rate / history survive first Google login
+      const guestRaw = localStorage.getItem(accountStorageKey("guest"));
+      if (guestRaw) {
+        try {
+          const guestSave = JSON.parse(guestRaw) as ReturnType<typeof emptySave>;
+          if (!primary) {
+            primary = guestSave;
+          } else {
+            primary = mergeSaves(primary, guestSave);
+          }
+          localStorage.setItem(accountStorageKey(accountKey), JSON.stringify(primary));
+          localStorage.removeItem(accountStorageKey("guest"));
+        } catch {
+          // ignore bad guest blob
+        }
+      }
     }
 
     if (primary) return primary;
@@ -869,6 +885,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
         ownedStickerPacks,
         achievementsClaimed,
         dailyMissionDay,
+        lifetimeChipsBought,
       };
       localStorage.setItem(accountStorageKey(accountRef.current), JSON.stringify(stateToSave));
     } catch {
@@ -899,6 +916,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       achievementsClaimed,
       dailyMissionDay,
       economyVersion: ECONOMY_VERSION,
+      lifetimeChipsBought,
       friends: readFriends(),
     };
     latestPayloadRef.current = cloudPayload;

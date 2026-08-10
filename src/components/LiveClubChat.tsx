@@ -9,6 +9,7 @@ import { ChatIcon } from "@/components/icons";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { cn } from "@/lib/cn";
 import { sound } from "@/lib/sound";
+import { PublicPlayerAvatar } from "@/components/PublicPlayerAvatar";
 import type { ChatMessage } from "@/app/api/chat/route";
 import {
   FREE_CHAT_STICKERS,
@@ -170,6 +171,12 @@ export function LiveClubChat({ open, onOpenChange, onUnreadChange }: Props) {
             userId: String(row.user_id || ""),
             displayName: String(row.display_name || "Player"),
             avatarUrl: typeof row.avatar_url === "string" ? row.avatar_url : null,
+            avatarId: typeof row.avatar_id === "string" ? row.avatar_id : null,
+            usePresetAvatar: Boolean(row.use_preset_avatar),
+            equippedFrame:
+              typeof row.equipped_frame === "string" && row.equipped_frame !== "none"
+                ? row.equipped_frame
+                : "none",
             body: String(row.body || ""),
             createdAt: String(row.created_at || new Date().toISOString()),
             isYou: row.user_id === googleUser.id,
@@ -210,6 +217,12 @@ export function LiveClubChat({ open, onOpenChange, onUnreadChange }: Props) {
           body: text,
           displayName: profile.displayName,
           avatarUrl: profile.usePresetAvatar ? null : avatarSrc,
+          avatarId: profile.avatarId,
+          usePresetAvatar: Boolean(profile.usePresetAvatar || (!avatarSrc && profile.avatarId)),
+          equippedFrame:
+            profile.equippedFrame && profile.equippedFrame !== "none"
+              ? profile.equippedFrame
+              : "none",
         }),
       });
       const data = (await res.json()) as {
@@ -311,19 +324,16 @@ export function LiveClubChat({ open, onOpenChange, onUnreadChange }: Props) {
                   m.isYou ? "flex-row-reverse text-right" : "flex-row text-left"
                 )}
               >
-                {m.avatarUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={m.avatarUrl}
-                    alt=""
-                    className="mt-0.5 h-8 w-8 shrink-0 rounded-full object-cover"
-                    referrerPolicy="no-referrer"
+                <div className="mt-0.5 shrink-0">
+                  <PublicPlayerAvatar
+                    size={32}
+                    displayName={m.displayName}
+                    avatarUrl={m.usePresetAvatar ? null : m.avatarUrl}
+                    avatarId={m.avatarId || "fox"}
+                    usePresetAvatar={Boolean(m.usePresetAvatar || (!m.avatarUrl && m.avatarId))}
+                    equippedFrame={m.equippedFrame && m.equippedFrame !== "none" ? m.equippedFrame : "none"}
                   />
-                ) : (
-                  <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/10 text-[10px] font-black text-[#F5C518]">
-                    {(m.displayName || "?").slice(0, 1).toUpperCase()}
-                  </span>
-                )}
+                </div>
                 <div
                   className={cn(
                     "max-w-[78%] rounded-2xl border px-3 py-2",

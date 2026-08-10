@@ -27,7 +27,7 @@ export async function GET(
   const { data, error } = await supabase
     .from("player_progress")
     .select(
-      "user_id, display_name, avatar_url, xp, vip_tier, wins, tickets_minted, total_earnings, score, profile, equipped_card_back, equipped_table_felt, stats, match_history"
+      "user_id, display_name, avatar_url, xp, vip_tier, wins, hands_played, tickets_minted, total_earnings, score, profile, equipped_card_back, equipped_table_felt, equipped_frame, owned_frames, stats, match_history"
     )
     .eq("user_id", id)
     .maybeSingle();
@@ -54,7 +54,7 @@ export async function GET(
   >;
   const career = normalizeCareerStats(
     {
-      handsPlayed: Number(statsRaw.handsPlayed) || 0,
+      handsPlayed: Math.max(Number(statsRaw.handsPlayed) || 0, Number(row.hands_played) || 0),
       gamesWon: Number(statsRaw.gamesWon) || 0,
       biggestWin: Number(statsRaw.biggestWin) || 0,
       currentStreak: Number(statsRaw.currentStreak) || 0,
@@ -69,6 +69,19 @@ export async function GET(
   const wins = career.gamesWon;
   const tickets = Number(row.tickets_minted) || 0;
   const earnings = career.totalEarnings;
+  const ownedFrames = Array.isArray(row.owned_frames) ? (row.owned_frames as string[]) : [];
+  const colFrame =
+    typeof row.equipped_frame === "string" && row.equipped_frame !== "none"
+      ? row.equipped_frame
+      : "none";
+  const profileFrame =
+    typeof profile.equippedFrame === "string" ? profile.equippedFrame : "none";
+  const equippedFrame =
+    colFrame !== "none" && (ownedFrames.length === 0 || ownedFrames.includes(colFrame))
+      ? colFrame
+      : profileFrame !== "none" && (ownedFrames.length === 0 || ownedFrames.includes(profileFrame))
+        ? profileFrame
+        : "none";
 
   return NextResponse.json({
     ok: true,
@@ -81,7 +94,7 @@ export async function GET(
         (typeof row.avatar_url === "string" ? row.avatar_url : null),
       avatarId: typeof profile.avatarId === "string" ? profile.avatarId : "club-runner",
       usePresetAvatar: Boolean(profile.usePresetAvatar),
-      equippedFrame: typeof profile.equippedFrame === "string" ? profile.equippedFrame : "none",
+      equippedFrame,
       favHand: typeof profile.favHand === "string" ? profile.favHand : "",
       xp: Number(row.xp) || 0,
       vipTier: typeof row.vip_tier === "string" ? row.vip_tier : "Bronze",

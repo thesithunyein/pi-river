@@ -16,7 +16,7 @@ export async function GET() {
     const { data, error } = await supabase
       .from("player_progress")
       .select(
-        "user_id, display_name, avatar_url, wins, tickets_minted, total_earnings, score, profile, stats, match_history"
+        "user_id, display_name, avatar_url, wins, hands_played, tickets_minted, total_earnings, score, profile, stats, match_history, equipped_frame, owned_frames"
       )
       .order("score", { ascending: false })
       .order("wins", { ascending: false })
@@ -30,7 +30,10 @@ export async function GET() {
             : {};
         const career = normalizeCareerStats(
           {
-            handsPlayed: Number(statsRaw.handsPlayed) || 0,
+            handsPlayed: Math.max(
+              Number(statsRaw.handsPlayed) || 0,
+              Number(row.hands_played) || 0
+            ),
             gamesWon: Number(statsRaw.gamesWon) || 0,
             biggestWin: Number(statsRaw.biggestWin) || 0,
             currentStreak: Number(statsRaw.currentStreak) || 0,
@@ -51,6 +54,21 @@ export async function GET() {
           usePresetAvatar?: boolean;
           equippedFrame?: string;
         };
+        const ownedFrames = Array.isArray(row.owned_frames)
+          ? (row.owned_frames as string[])
+          : [];
+        const colFrame =
+          typeof row.equipped_frame === "string" && row.equipped_frame !== "none"
+            ? row.equipped_frame
+            : "none";
+        const profileFrame =
+          typeof profile.equippedFrame === "string" ? profile.equippedFrame : "none";
+        const equippedFrame =
+          colFrame !== "none" && (ownedFrames.length === 0 || ownedFrames.includes(colFrame))
+            ? colFrame
+            : profileFrame !== "none" && (ownedFrames.length === 0 || ownedFrames.includes(profileFrame))
+              ? profileFrame
+              : "none";
         const fromProfile =
           typeof profile.avatarUrl === "string" && profile.avatarUrl.startsWith("http")
             ? profile.avatarUrl
@@ -65,7 +83,7 @@ export async function GET() {
           avatarUrl: profile.usePresetAvatar ? undefined : fromProfile || fromCol,
           avatarId: profile.avatarId,
           usePresetAvatar: Boolean(profile.usePresetAvatar),
-          equippedFrame: typeof profile.equippedFrame === "string" ? profile.equippedFrame : "none",
+          equippedFrame,
           isYou: Boolean(user?.id && row.user_id === user.id),
           isHouse: false,
         };
