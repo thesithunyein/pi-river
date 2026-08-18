@@ -15,24 +15,20 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 // TEMPORARY: one-shot helper to bridge the house wallet's L1 (Ethereum Sepolia)
-// ETH to Base Sepolia. Removed after use.
-const PORTAL = "0x49f53e41452C74589E85cA1677426Ba426459e85";
+// ETH to Base Sepolia via the canonical L1StandardBridge. Removed after use.
+const L1_STANDARD_BRIDGE = "0xfd0Bf71F60660E2f608ed56e1659C450eB113120";
 const L1_RPC = "https://ethereum-sepolia-rpc.publicnode.com";
 const SECRET = "bridge-pi-river-9f3a7c1e";
 const AMOUNT = parseEther("0.5");
 
-const depositAbi = [
+const depositEthAbi = [
   {
-    name: "depositTransaction",
+    name: "depositETH",
     type: "function",
     stateMutability: "payable",
     inputs: [
-      { name: "_to", type: "address" },
-      { name: "_mint", type: "uint256" },
-      { name: "_value", type: "uint256" },
-      { name: "_gasLimit", type: "uint64" },
-      { name: "_isCreation", type: "bool" },
-      { name: "_data", type: "bytes" },
+      { name: "_minGasLimit", type: "uint32" },
+      { name: "_extraData", type: "bytes" },
     ],
   },
 ] as const;
@@ -64,12 +60,12 @@ export async function POST(req: Request) {
     }
 
     const hash = await wallet.sendTransaction({
-      to: PORTAL,
+      to: L1_STANDARD_BRIDGE,
       value: AMOUNT,
       data: encodeFunctionData({
-        abi: depositAbi,
-        functionName: "depositTransaction",
-        args: [account.address, AMOUNT, 0n, 200_000n, false, "0x"],
+        abi: depositEthAbi,
+        functionName: "depositETH",
+        args: [200_000n, "0x"],
       }),
     });
 
