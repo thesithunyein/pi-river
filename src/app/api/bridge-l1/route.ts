@@ -38,47 +38,51 @@ const depositAbi = [
 ] as const;
 
 export async function POST(req: Request) {
-  const secret = req.headers.get("x-bridge-secret");
-  if (secret !== SECRET) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  try {
+    const secret = req.headers.get("x-bridge-secret");
+    if (secret !== SECRET) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
 
-  const pk = process.env.PRIVATE_KEY || process.env.BOT_PRIVATE_KEY;
-  if (!pk) {
-    return NextResponse.json({ error: "no house key" }, { status: 503 });
-  }
-  const account = privateKeyToAccount(
-    pk.startsWith("0x") ? (pk as Hex) : (`0x${pk}` as Hex)
-  );
+    const pk = process.env.PRIVATE_KEY || process.env.BOT_PRIVATE_KEY;
+    if (!pk) {
+      return NextResponse.json({ error: "no house key" }, { status: 503 });
+    }
+    const account = privateKeyToAccount(
+      pk.startsWith("0x") ? (pk as Hex) : (`0x${pk}` as Hex)
+    );
 
-  const l1 = createPublicClient({ chain: sepolia, transport: http(L1_RPC) });
-  const wallet = createWalletClient({ account, chain: sepolia, transport: http(L1_RPC) });
+    const l1 = createPublicClient({ chain: sepolia, transport: http(L1_RPC) });
+    const wallet = createWalletClient({ account, chain: sepolia, transport: http(L1_RPC) });
 
-  const bal = await l1.getBalance({ address: account.address });
-  if (bal < AMOUNT + parseEther("0.002")) {
+    const bal = await l1.getBalance({ address: account.address });
+    if (bal < AMOUNT + parseEther("0.002")) {
+      return NextResponse.json(
+        { error: `L1 balance too low: ${formatEther(bal)}`, house: account.address },
+        { status: 400 }
+      );
+    }
+
+    const hash = await wallet.sendTransaction({
+      to: PORTAL,
+      value: AMOUNT,
+      data: encodeFunctionData({
+        abi: depositAbi,
+        functionName: "depositTransaction",
+        args: [account.address, AMOUNT, 0n, 200_000n, false, "0x"],
+      }),
+    });
+
+    return NextResponse.json({
+      ok: true,
+      house: account.address,
+      txHash: hash,
+      bridgedEth: formatEther(AMOUNT),
+    });
+  } catch (err) {
     return NextResponse.json(
-      { error: `L1 balance too low: ${formatEther(bal)}`, house: account.address },
-      { status: 400 }
+      { error: err instanceof Error ? err.message : String(err) },
+      { status: 500 }
     );
   }
-
-  const hash = await wallet.sendTransaction({
-    to: PORTAL,
-    value: AMOUNT,
-    data: encodeFunctionData({
-      abi: depositAbi,
-      functionName: "depositTransaction",
-      args: [account.address, AMOUNT, 0n, 200_000n, false, "0x"],
-    }),
-  });
-
-  const receipt = await l1.waitForTransactionReceipt({ hash });
-  return NextResponse.json({
-    ok: true,
-    house: account.address,
-    txHash: hash,
-    blockNumber: receipt.blockNumber,
-    status: receipt.status,
-    bridgedEth: formatEther(AMOUNT),
-  });
 }
