@@ -1,6 +1,6 @@
 import { formatEther, type Address, type Hex } from "viem";
 import { RIVER_HOLDEM_ADDRESS, riverHoldemAbi } from "@/lib/contracts/riverHoldem";
-import { BOT_BUY_IN, getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
+import { BOT_BUY_IN, botWriteContract, getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
 
 export type LiveTable = {
   player0: Address;
@@ -106,7 +106,7 @@ export async function botJoin(tableId: bigint) {
     throw new Error("Bot cannot join its own table.");
   }
 
-  const hash = await wallet.writeContract({
+  const hash = await botWriteContract({
     address: RIVER_HOLDEM_ADDRESS,
     abi: riverHoldemAbi,
     functionName: "joinTable",
@@ -146,7 +146,7 @@ export async function botRefillSeat(tableId: bigint) {
     return { refilled: false, reason: "Bad stage." };
   }
 
-  const cashHash = (await wallet.writeContract({
+  const cashHash = (await botWriteContract({
     address: RIVER_HOLDEM_ADDRESS,
     abi: riverHoldemAbi,
     functionName: "cashOut",
@@ -196,7 +196,7 @@ export async function botAct(tableId: bigint, difficulty: BotDifficulty = 1) {
     const potOddsPressure = toCall > table.pot / 2n;
     if (potOddsPressure && roll < foldChance) {
       action = "fold";
-      hash = await wallet.writeContract({
+      hash = await botWriteContract({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
         functionName: "fold",
@@ -206,7 +206,7 @@ export async function botAct(tableId: bigint, difficulty: BotDifficulty = 1) {
       });
     } else {
       action = "call";
-      hash = await wallet.writeContract({
+      hash = await botWriteContract({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
         functionName: "checkCall",
@@ -221,7 +221,7 @@ export async function botAct(tableId: bigint, difficulty: BotDifficulty = 1) {
     const capped = raiseTo > myBet + myStack ? myBet + myStack : raiseTo;
     if (capped > table.currentBet) {
       action = "raise";
-      hash = await wallet.writeContract({
+      hash = await botWriteContract({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
         functionName: "raiseTo",
@@ -231,7 +231,7 @@ export async function botAct(tableId: bigint, difficulty: BotDifficulty = 1) {
       });
     } else {
       action = "check";
-      hash = await wallet.writeContract({
+      hash = await botWriteContract({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
         functionName: "checkCall",
@@ -242,7 +242,7 @@ export async function botAct(tableId: bigint, difficulty: BotDifficulty = 1) {
     }
   } else {
     action = toCall > 0n ? "call" : "check";
-    hash = await wallet.writeContract({
+    hash = await botWriteContract({
       address: RIVER_HOLDEM_ADDRESS,
       abi: riverHoldemAbi,
       functionName: "checkCall",

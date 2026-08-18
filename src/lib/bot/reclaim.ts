@@ -4,7 +4,7 @@ import {
   RIVER_HOLDEM_ADDRESS,
   riverHoldemAbi,
 } from "@/lib/contracts/riverHoldem";
-import { BOT_BUY_IN, getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
+import { BOT_BUY_IN, botWriteContract, getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
 
 const ZERO = "0x0000000000000000000000000000000000000000" as Address;
 
@@ -124,7 +124,7 @@ export async function botReclaimFunds(opts?: {
           }
 
           if (handLive && toAct.toLowerCase() === bot && stage >= 1 && stage <= 4) {
-            const hash = await wallet.writeContract({
+            const hash = await botWriteContract({
               address: contract,
               abi: riverHoldemAbi,
               functionName: "fold",
@@ -152,7 +152,7 @@ export async function botReclaimFunds(opts?: {
             const stack = seat === 0 ? stack0 : stack1;
             const player = seat === 0 ? player0 : player1;
             if (stack > 0n && player.toLowerCase() === bot) {
-              const hash = (await wallet.writeContract({
+              const hash = (await botWriteContract({
                 address: contract,
                 abi: riverHoldemAbi,
                 functionName: "cashOut",

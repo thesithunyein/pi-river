@@ -1,5 +1,5 @@
 import { type Address, type Hex } from "viem";
-import { getBotAccount, getBotPublicClient, getBotWalletClient } from "@/lib/bot/wallet";
+import { botWriteContract, getBotAccount, getBotPublicClient, getBotWalletClient } from "@/lib/bot/wallet";
 import {
   RIVER_CHIPS_ADDRESS,
   RIVER_CLUB_ADDRESS,
@@ -43,7 +43,7 @@ export async function syncRiverChipsMintOnly(playAddress: Address, ledgerChips: 
   if (target > bal) {
     let delta = target - bal;
     if (delta > MAX_MINT_PER_SYNC) delta = MAX_MINT_PER_SYNC;
-    const hash = await wallet.writeContract({
+    const hash = await botWriteContract({
       address: RIVER_CHIPS_ADDRESS,
       abi: riverChipsAbi,
       functionName: "mint",
@@ -87,7 +87,7 @@ export async function upsertClubScore(opts: {
 
   const score = ladderScore(opts.wins, opts.tickets, opts.totalEarnings);
   const name = (opts.name || "Player").slice(0, 32);
-  const hash = await wallet.writeContract({
+  const hash = await botWriteContract({
     address: RIVER_CLUB_ADDRESS,
     abi: riverClubAbi,
     functionName: "upsert",

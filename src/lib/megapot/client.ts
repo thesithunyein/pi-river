@@ -1,5 +1,5 @@
 import { formatUnits, type Address, type Hex } from "viem";
-import { getBotAccount, getBotPublicClient, getBotWalletClient } from "@/lib/bot/wallet";
+import { botWriteContract, getBotAccount, getBotPublicClient, getBotWalletClient } from "@/lib/bot/wallet";
 import {
   MEGAPOT_SEPOLIA,
   MEGAPOT_SOURCE,
@@ -103,7 +103,7 @@ export async function mintMegapotTicket(recipient: Address) {
   })) as bigint;
 
   if (allowance < ticketPrice) {
-    const approveHash = (await wallet.writeContract({
+    const approveHash = (await botWriteContract({
       address: MEGAPOT_SEPOLIA.usdc,
       abi: megapotAbi,
       functionName: "approve",
@@ -115,7 +115,7 @@ export async function mintMegapotTicket(recipient: Address) {
   }
 
   const referrer = account.address;
-  const buyHash = (await wallet.writeContract({
+  const buyHash = (await botWriteContract({
     address: MEGAPOT_SEPOLIA.randomBuyer,
     abi: megapotAbi,
     functionName: "buyTickets",

@@ -2,7 +2,7 @@ import { Lightning } from "@inco/lightning-js/lite";
 import type { Hex } from "viem";
 import { RIVER_HOLDEM_ADDRESS, riverHoldemAbi } from "@/lib/contracts/riverHoldem";
 import { baseSepoliaRpcUrls } from "@/lib/rpc";
-import { getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
+import { botWriteContract, getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
 
 let lightningPromise: Promise<Lightning> | null = null;
 
@@ -86,7 +86,7 @@ export async function botSubmitShowdown(tableId: bigint) {
 
   const hashes: Hex[] = [];
   for (let i = 0; i < 2; i++) {
-    const hash = await wallet.writeContract({
+    const hash = await botWriteContract({
       address: RIVER_HOLDEM_ADDRESS,
       abi: riverHoldemAbi,
       functionName: "submitShowdownCard",
@@ -109,7 +109,7 @@ export async function botSubmitShowdown(tableId: bigint) {
   if (boardHandles.length > 0) {
     const boardAttest = await zap.attestedReveal(boardHandles);
     for (let i = 0; i < boardAttest.length; i++) {
-      const hash = await wallet.writeContract({
+      const hash = await botWriteContract({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
         functionName: "submitShowdownCard",
@@ -214,7 +214,7 @@ export async function botStartNextHand(tableId: bigint) {
   }
 
   try {
-    const hash = await wallet.writeContract({
+    const hash = await botWriteContract({
       address: RIVER_HOLDEM_ADDRESS,
       abi: riverHoldemAbi,
       functionName: "startNextHand",

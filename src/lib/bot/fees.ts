@@ -1,6 +1,6 @@
 import { formatEther, type Hex } from "viem";
 import { RIVER_HOLDEM_ADDRESS, riverHoldemAbi } from "@/lib/contracts/riverHoldem";
-import { getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
+import { botWriteContract, getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
 
 /** Measured on Base Sepolia — Inco shuffledRange fee for a 52-card deck. */
 export const SHUFFLE_FEE_FALLBACK = 104n * 10n ** 12n; // 0.000104 ETH
@@ -66,7 +66,7 @@ export async function ensureShuffleFees(incomingBuyIn = 0n): Promise<{
     if (available < topUp) {
       return { funded: false, shortfall: 0n, hash: null };
     }
-    const hash = (await wallet.writeContract({
+    const hash = (await botWriteContract({
       address: RIVER_HOLDEM_ADDRESS,
       abi: riverHoldemAbi,
       functionName: "fundFees",
@@ -104,7 +104,7 @@ export async function ensureShuffleFees(incomingBuyIn = 0n): Promise<{
     );
   }
 
-  const hash = (await wallet.writeContract({
+  const hash = (await botWriteContract({
     address: RIVER_HOLDEM_ADDRESS,
     abi: riverHoldemAbi,
     functionName: "fundFees",
