@@ -39,3 +39,15 @@ export function baseSepoliaTransport() {
 export function baseSepoliaWriteTransport() {
   return http("https://base-sepolia-rpc.publicnode.com");
 }
+
+/**
+ * Inco Lightning host-chain RPCs. publicnode goes FIRST regardless of env,
+ * because sepolia.base.org rate-limits per-IP and returns 503 for eth_call
+ * from Vercel's egress, which breaks decrypt/reveal for the bot AND the client.
+ */
+export function lightningRpcUrls(): string[] {
+  return [
+    "https://base-sepolia-rpc.publicnode.com",
+    "https://sepolia.base.org",
+  ];
+}
