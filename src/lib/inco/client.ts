@@ -3,15 +3,16 @@
 import { Lightning } from "@inco/lightning-js/lite";
 import type { Hex } from "viem";
 import type { WalletClient } from "viem";
+import { baseSepoliaRpcUrls } from "@/lib/rpc";
 
 let lightningPromise: Promise<Lightning> | null = null;
 
 export async function getLightning() {
   if (!lightningPromise) {
     lightningPromise = Lightning.baseSepoliaTestnet({
-      hostChainRpcUrls: [
-        process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://sepolia.base.org",
-      ],
+      // Browser-side decrypt uses the fallback list: sepolia.base.org rate-limits
+      // per IP, and a player's own IP can get throttled during a long session.
+      hostChainRpcUrls: baseSepoliaRpcUrls(),
     });
   }
   return lightningPromise;
