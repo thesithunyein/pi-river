@@ -98,36 +98,9 @@ export async function botSubmitShowdown(tableId: bigint) {
     hashes.push(hash);
   }
 
-  // Bot seat can also fill board slots — cuts ~5 client txs off the settle path
-  const [outs, count] = (await publicClient.readContract({
-    address: RIVER_HOLDEM_ADDRESS,
-    abi: riverHoldemAbi,
-    functionName: "getBoardHandles",
-    args: [tableId],
-  })) as readonly [readonly Hex[], number];
-  const boardHandles = outs.slice(0, Number(count)).filter((h) => h && h !== (`0x${"0".repeat(64)}` as Hex));
-  if (boardHandles.length > 0) {
-    const boardAttest = await zap.attestedReveal(boardHandles);
-    for (let i = 0; i < boardAttest.length; i++) {
-      const hash = await botWriteContract({
-        address: RIVER_HOLDEM_ADDRESS,
-        abi: riverHoldemAbi,
-        functionName: "submitShowdownCard",
-        args: [
-          tableId,
-          4 + i,
-          plaintextToBigInt(boardAttest[i].plaintext as unknown),
-          sigsToHex(boardAttest[i].covalidatorSignatures),
-        ],
-        account,
-        chain: wallet.chain,
-      });
-      await publicClient.waitForTransactionReceipt({ hash });
-      hashes.push(hash);
-    }
-  }
-
-  return { skipped: false, hashes, slots, values: peeked.map((p) => Number(p.value)), boardSubmitted: boardHandles.length };
+  // Board slots are submitted by the client (its attestedReveal works, while
+  // the server-side attestedReveal is rate-limited from Vercel's egress).
+  return { skipped: false, hashes, slots, values: peeked.map((p) => Number(p.value)), boardSubmitted: 0 };
 }
 
 /**

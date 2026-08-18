@@ -1442,34 +1442,36 @@ export default function OnchainTablePage() {
           });
           await waitTx(hash);
         }
+        // Board slots come from this client: its attestedReveal works, while the
+        // bot's server-side attestedReveal is rate-limited from Vercel's egress.
+        setLog("Submitting board cards…");
+        const [outs, count] = (await publicClient!.readContract({
+          address: RIVER_HOLDEM_ADDRESS,
+          abi: riverHoldemAbi,
+          functionName: "getBoardHandles",
+          args: [tableId],
+        })) as readonly [readonly Hex[], number];
+        const board = await readRevealed(outs.slice(0, count) as Hex[]);
+        for (let i = 0; i < board.length; i++) {
+          const hash = await writeFn({
+            address: RIVER_HOLDEM_ADDRESS,
+            abi: riverHoldemAbi,
+            functionName: "submitShowdownCard",
+            args: [tableId, 4 + i, board[i].value, board[i].sigs],
+          });
+          await waitTx(hash);
+        }
       }
 
       async function submitBotSide(): Promise<{
         values?: Array<number | string>;
       }> {
         if (!vsBot) {
-          // Friend path: still need board from this client
-          setLog("Submitting board cards…");
-          const [outs, count] = (await publicClient!.readContract({
-            address: RIVER_HOLDEM_ADDRESS,
-            abi: riverHoldemAbi,
-            functionName: "getBoardHandles",
-            args: [tableId],
-          })) as readonly [readonly Hex[], number];
-          const board = await readRevealed(outs.slice(0, count) as Hex[]);
-          for (let i = 0; i < board.length; i++) {
-            const hash = await writeFn({
-              address: RIVER_HOLDEM_ADDRESS,
-              abi: riverHoldemAbi,
-              functionName: "submitShowdownCard",
-              args: [tableId, 4 + i, board[i].value, board[i].sigs],
-            });
-            await waitTx(hash);
-          }
+          // Board is handled by submitMyHoles; friend path needs nothing more.
           return {};
         }
 
-        setLog("River Bot is showing cards + board…");
+        setLog("River Bot is showing cards…");
         let botData: {
           error?: string;
           reason?: string;
