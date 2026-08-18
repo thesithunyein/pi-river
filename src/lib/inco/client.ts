@@ -3,15 +3,14 @@
 import { Lightning } from "@inco/lightning-js/lite";
 import type { Hex } from "viem";
 import type { WalletClient } from "viem";
+import { baseSepoliaRpcUrls } from "@/lib/rpc";
 
 let lightningPromise: Promise<Lightning> | null = null;
 
 export async function getLightning() {
   if (!lightningPromise) {
     lightningPromise = Lightning.baseSepoliaTestnet({
-      hostChainRpcUrls: [
-        process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://sepolia.base.org",
-      ],
+      hostChainRpcUrls: baseSepoliaRpcUrls(),
     });
   }
   return lightningPromise;

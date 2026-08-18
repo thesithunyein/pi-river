@@ -1,4 +1,5 @@
 import { baseSepolia } from "wagmi/chains";
+import { baseSepoliaRpcUrls } from "@/lib/rpc";
 
 const BASE_SEPOLIA_HEX = `0x${baseSepolia.id.toString(16)}`;
 
@@ -40,10 +41,7 @@ export async function forceBaseSepolia(
           chainId: BASE_SEPOLIA_HEX,
           chainName: "Base Sepolia",
           nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-          rpcUrls: [
-            process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://sepolia.base.org",
-            "https://base-sepolia-rpc.publicnode.com",
-          ],
+          rpcUrls: baseSepoliaRpcUrls(),
           blockExplorerUrls: ["https://sepolia.basescan.org"],
         },
       ],

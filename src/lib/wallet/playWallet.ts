@@ -4,7 +4,6 @@ import {
   createPublicClient,
   createWalletClient,
   formatEther,
-  http,
   type Account,
   type Address,
   type Hex,
@@ -13,6 +12,7 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
+import { baseSepoliaTransport } from "@/lib/rpc";
 import {
   LEGACY_RIVER_HOLDEM_ADDRESSES,
   RIVER_HOLDEM_ADDRESS,
@@ -29,13 +29,6 @@ type PlayWalletStore = Record<string, Hex>;
 
 /** In-memory fallback when Safari private mode blocks storage writes. */
 const memoryStore: PlayWalletStore = {};
-
-function rpcUrl() {
-  return (
-    process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC ||
-    "https://base-sepolia-rpc.publicnode.com"
-  );
-}
 
 function pickStorage(): Storage | null {
   if (typeof window === "undefined") return null;
@@ -98,7 +91,7 @@ export function getPlayAddress(googleUserId: string): `0x${string}` {
 export function getPlayPublicClient() {
   return createPublicClient({
     chain: baseSepolia,
-    transport: http(rpcUrl()),
+    transport: baseSepoliaTransport(),
   });
 }
 
@@ -107,7 +100,7 @@ export function getPlayWalletClient(googleUserId: string): WalletClient {
   return createWalletClient({
     account,
     chain: baseSepolia,
-    transport: http(rpcUrl()),
+    transport: baseSepoliaTransport(),
   });
 }
 

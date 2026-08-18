@@ -1,6 +1,7 @@
 import { Lightning } from "@inco/lightning-js/lite";
 import type { Hex } from "viem";
 import { RIVER_HOLDEM_ADDRESS, riverHoldemAbi } from "@/lib/contracts/riverHoldem";
+import { baseSepoliaRpcUrls } from "@/lib/rpc";
 import { getBotAccount, getBotPublicClient, getBotWalletClient } from "./wallet";
 
 let lightningPromise: Promise<Lightning> | null = null;
@@ -8,11 +9,7 @@ let lightningPromise: Promise<Lightning> | null = null;
 function getLightning() {
   if (!lightningPromise) {
     lightningPromise = Lightning.baseSepoliaTestnet({
-      hostChainRpcUrls: [
-        process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC ||
-          process.env.BASE_SEPOLIA_RPC_URL ||
-          "https://sepolia.base.org",
-      ],
+      hostChainRpcUrls: baseSepoliaRpcUrls(),
     });
   }
   return lightningPromise;

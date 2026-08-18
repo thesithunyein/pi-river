@@ -1,10 +1,11 @@
 "use client";
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { http, WagmiProvider, createConfig, createStorage, cookieStorage } from "wagmi";
+import { WagmiProvider, createConfig, createStorage, cookieStorage } from "wagmi";
 import { injected } from "@wagmi/core";
 import { baseSepolia } from "wagmi/chains";
 import { useState, type ReactNode } from "react";
+import { baseSepoliaTransport } from "@/lib/rpc";
 
 const storage =
   typeof window !== "undefined"
@@ -26,9 +27,7 @@ export const wagmiConfig = createConfig({
     }),
   ],
   transports: {
-    [baseSepolia.id]: http(
-      process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://sepolia.base.org"
-    ),
+    [baseSepolia.id]: baseSepoliaTransport(),
   },
   storage,
   ssr: true,

@@ -3,13 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useSendTransaction, useAccount, useSwitchChain, useBalance } from "wagmi";
-import { type Hex, formatEther, createPublicClient, http } from "viem";
+import { type Hex, formatEther, createPublicClient } from "viem";
 import { useAuthGate } from "@/components/AuthGate";
 import { usePlaySession } from "@/hooks/usePlaySession";
 import { useGame } from "@/context/GameContext";
 import { GradientButton } from "@/components/ui/GradientButton";
 import { PremiumChip } from "@/components/PremiumChip";
 import { forceBaseSepolia, baseSepolia } from "@/lib/wallet/forceBaseSepolia";
+import { baseSepoliaTransport } from "@/lib/rpc";
 import { sound } from "@/lib/sound";
 import { CHIP_PACKS, type ChipPackDef } from "@/lib/stickers";
 import { cn } from "@/lib/cn";
@@ -85,9 +86,7 @@ function clearPending() {
 function sepoliaClient() {
   return createPublicClient({
     chain: baseSepolia,
-    transport: http(
-      process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC || "https://sepolia.base.org"
-    ),
+    transport: baseSepoliaTransport(),
   });
 }
 

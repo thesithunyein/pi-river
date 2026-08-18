@@ -1,6 +1,7 @@
-import { createWalletClient, createPublicClient, http, type Hex } from "viem";
+import { createWalletClient, createPublicClient, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
+import { baseSepoliaTransport } from "@/lib/rpc";
 
 function normalizePk(raw?: string): Hex | null {
   if (!raw) return null;
@@ -22,11 +23,7 @@ export function getBotAccount() {
 export function getBotPublicClient() {
   return createPublicClient({
     chain: baseSepolia,
-    transport: http(
-      process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC ||
-        process.env.BASE_SEPOLIA_RPC_URL ||
-        "https://base-sepolia-rpc.publicnode.com"
-    ),
+    transport: baseSepoliaTransport(),
   });
 }
 
@@ -36,11 +33,7 @@ export function getBotWalletClient() {
   return createWalletClient({
     account,
     chain: baseSepolia,
-    transport: http(
-      process.env.NEXT_PUBLIC_BASE_SEPOLIA_RPC ||
-        process.env.BASE_SEPOLIA_RPC_URL ||
-        "https://base-sepolia-rpc.publicnode.com"
-    ),
+    transport: baseSepoliaTransport(),
   });
 }
 
