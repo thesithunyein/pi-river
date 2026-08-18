@@ -1433,6 +1433,14 @@ export default function OnchainTablePage() {
 
       const mySlots = isP0 ? [0, 1] : [2, 3];
 
+      const [boardOuts, boardCount] = (await publicClient.readContract({
+        address: RIVER_HOLDEM_ADDRESS,
+        abi: riverHoldemAbi,
+        functionName: "getBoardHandles",
+        args: [tableId],
+      })) as readonly [readonly Hex[], number];
+      const board = await readRevealed(boardOuts.slice(0, boardCount) as Hex[]);
+
       async function submitMyHoles() {
         for (let i = 0; i < 2; i++) {
           setLog(`Submitting your card ${i + 1}/2…`);
@@ -1444,28 +1452,21 @@ export default function OnchainTablePage() {
           });
           await waitTx(hash);
         }
-        // Board slots come from this client: its attestedReveal works, while the
-        // bot's server-side attestedReveal is rate-limited from Vercel's egress.
-        setLog("Submitting board cards…");
-        const [outs, count] = (await publicClient!.readContract({
-          address: RIVER_HOLDEM_ADDRESS,
-          abi: riverHoldemAbi,
-          functionName: "getBoardHandles",
-          args: [tableId],
-        })) as readonly [readonly Hex[], number];
-        const board = await readRevealed(outs.slice(0, count) as Hex[]);
-        for (let i = 0; i < board.length; i++) {
-          const hash = await writeFn({
-            address: RIVER_HOLDEM_ADDRESS,
-            abi: riverHoldemAbi,
-            functionName: "submitShowdownCard",
-            args: [tableId, 4 + i, board[i].value, board[i].sigs],
-          });
-          await waitTx(hash);
+        if (!vsBot) {
+          setLog("Submitting board cards…");
+          for (let i = 0; i < board.length; i++) {
+            const hash = await writeFn({
+              address: RIVER_HOLDEM_ADDRESS,
+              abi: riverHoldemAbi,
+              functionName: "submitShowdownCard",
+              args: [tableId, 4 + i, board[i].value, board[i].sigs],
+            });
+            await waitTx(hash);
+          }
         }
       }
 
-      async function submitBotSide(): Promise<{
+      async function submitBotSide(boardProofs: typeof board): Promise<{
         values?: Array<number | string>;
       }> {
         if (!vsBot) {
@@ -1489,7 +1490,13 @@ export default function OnchainTablePage() {
           const botRes = await fetch("/api/bot/showdown", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ tableId: tableId.toString() }),
+            body: JSON.stringify({
+              tableId: tableId.toString(),
+              board: boardProofs.map((card) => ({
+                value: card.value.toString(),
+                sigs: card.sigs,
+              })),
+            }),
           });
           const text = await botRes.text();
           try {
@@ -1514,7 +1521,7 @@ export default function OnchainTablePage() {
       // covalidator request and leave the UI stuck on Settling. Reveal the bot
       // first so its cards are painted as soon as the server returns, then
       // submit this player's proof and the public board.
-      const botSide = vsBot ? await submitBotSide() : {};
+      const botSide = vsBot ? await submitBotSide(board) : {};
       await submitMyHoles();
       const shownBotCards =
         botSide.values && botSide.values.length >= 2

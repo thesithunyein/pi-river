@@ -37,7 +37,10 @@ function sigsToHex(sigs: unknown): Hex[] {
 }
 
 /** Bot peeks its own hole cards and submits showdown slots. */
-export async function botSubmitShowdown(tableId: bigint) {
+export async function botSubmitShowdown(
+  tableId: bigint,
+  boardProofs: ReadonlyArray<{ value: bigint; sigs: Hex[] }> = [],
+) {
   const account = getBotAccount();
   const wallet = getBotWalletClient();
   const publicClient = getBotPublicClient();
@@ -98,9 +101,29 @@ export async function botSubmitShowdown(tableId: bigint) {
     hashes.push(hash);
   }
 
-  // Board slots are submitted by the client (its attestedReveal works, while
-  // the server-side attestedReveal is rate-limited from Vercel's egress).
-  return { skipped: false, hashes, slots, values: peeked.map((p) => Number(p.value)), boardSubmitted: 0 };
+  // The browser obtains the public board attestations, then the bot wallet
+  // submits them. This keeps all board writes on the reliable server wallet
+  // without asking Vercel to call attestedReveal itself.
+  for (let i = 0; i < boardProofs.length && i < 5; i++) {
+    const hash = await botWriteContract({
+      address: RIVER_HOLDEM_ADDRESS,
+      abi: riverHoldemAbi,
+      functionName: "submitShowdownCard",
+      args: [tableId, 4 + i, boardProofs[i].value, boardProofs[i].sigs],
+      account,
+      chain: wallet.chain,
+    });
+    await publicClient.waitForTransactionReceipt({ hash });
+    hashes.push(hash);
+  }
+
+  return {
+    skipped: false,
+    hashes,
+    slots,
+    values: peeked.map((p) => Number(p.value)),
+    boardSubmitted: Math.min(boardProofs.length, 5),
+  };
 }
 
 /**
