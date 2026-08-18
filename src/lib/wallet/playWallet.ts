@@ -12,7 +12,7 @@ import {
 } from "viem";
 import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
-import { baseSepoliaTransport } from "@/lib/rpc";
+import { baseSepoliaTransport, baseSepoliaWriteTransport } from "@/lib/rpc";
 import {
   LEGACY_RIVER_HOLDEM_ADDRESSES,
   RIVER_HOLDEM_ADDRESS,
@@ -100,7 +100,7 @@ export function getPlayWalletClient(googleUserId: string): WalletClient {
   return createWalletClient({
     account,
     chain: baseSepolia,
-    transport: baseSepoliaTransport(),
+    transport: baseSepoliaWriteTransport(),
   });
 }
 

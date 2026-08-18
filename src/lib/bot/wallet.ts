@@ -1,7 +1,7 @@
 import { createWalletClient, createPublicClient, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { baseSepolia } from "viem/chains";
-import { baseSepoliaTransport } from "@/lib/rpc";
+import { baseSepoliaTransport, baseSepoliaWriteTransport } from "@/lib/rpc";
 
 function normalizePk(raw?: string): Hex | null {
   if (!raw) return null;
@@ -33,7 +33,7 @@ export function getBotWalletClient() {
   return createWalletClient({
     account,
     chain: baseSepolia,
-    transport: baseSepoliaTransport(),
+    transport: baseSepoliaWriteTransport(),
   });
 }
 

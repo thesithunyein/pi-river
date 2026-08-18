@@ -3,12 +3,14 @@ import { fallback, http } from "viem";
 /**
  * Public Base Sepolia RPCs, ordered by reliability.
  * sepolia.base.org rate-limits per IP and frequently fails from Vercel's
- * shared egress, so every client uses a fallback chain instead of one URL.
+ * shared egress, so reads use a fallback chain instead of one URL.
+ *
+ * drpc.org is intentionally NOT listed: it is read-only and fails on
+ * eth_sendRawTransaction, which broke bot showdown submissions.
  */
 const PUBLIC_RPCS = [
   "https://base-sepolia-rpc.publicnode.com",
   "https://sepolia.base.org",
-  "https://base-sepolia.drpc.org",
 ];
 
 /** Ordered RPC URL list: env override first, then public fallbacks. */
@@ -25,4 +27,15 @@ export function baseSepoliaTransport() {
     baseSepoliaRpcUrls().map((url) => http(url, { retryCount: 1 })),
     { rank: false }
   );
+}
+
+/**
+ * Single, proven endpoint for WRITES (eth_sendRawTransaction).
+ *
+ * Writes must NOT use the fallback: re-sending the same signed tx across RPCs
+ * causes nonce races ("replacement transaction underpriced") and drpc.org is
+ * read-only, so wallet clients pin to one reliable node.
+ */
+export function baseSepoliaWriteTransport() {
+  return http("https://base-sepolia-rpc.publicnode.com");
 }
