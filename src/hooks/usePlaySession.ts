@@ -46,10 +46,13 @@ export function usePlaySession() {
 
   const publicClient = useMemo(() => getPlayPublicClient(), []);
 
-  const ensureFunded = useCallback(async (minBalance?: bigint) => {
-    if (!googleUserId) throw new Error("Sign in with Google to play.");
-    return ensurePlayWalletFunded(googleUserId, minBalance);
-  }, [googleUserId]);
+  const ensureFunded = useCallback(
+    async (minBalance?: bigint, options?: { reclaim?: boolean }) => {
+      if (!googleUserId) throw new Error("Sign in with Google to play.");
+      return ensurePlayWalletFunded(googleUserId, minBalance, options);
+    },
+    [googleUserId]
+  );
 
   const writeContract = useCallback(
     async (params: {

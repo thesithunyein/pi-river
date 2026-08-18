@@ -202,7 +202,8 @@ export async function reclaimPlayWalletStacks(googleUserId: string) {
 
 export async function ensurePlayWalletFunded(
   googleUserId: string,
-  minBalance: bigint = PLAY_MIN
+  minBalance: bigint = PLAY_MIN,
+  options?: { reclaim?: boolean }
 ) {
   const address = getPlayAddress(googleUserId);
   const publicClient = getPlayPublicClient();
@@ -212,21 +213,24 @@ export async function ensurePlayWalletFunded(
     return { ok: true, funded: true, balanceEth: formatEther(balance), drippedEth: "0" };
   }
 
-  // Recover chips left on abandoned tables before asking the house faucet
-  try {
-    await reclaimPlayWalletStacks(googleUserId);
-  } catch {
-    // continue to drip
-  }
-  balance = await publicClient.getBalance({ address });
-  if (balance >= minBalance) {
-    return {
-      ok: true,
-      funded: true,
-      balanceEth: formatEther(balance),
-      drippedEth: "0",
-      reclaimed: true,
-    };
+  // Recovery scans can touch many historical tables. Showdown must not wait
+  // on that scan, so callers can disable it and go straight to the faucet.
+  if (options?.reclaim !== false) {
+    try {
+      await reclaimPlayWalletStacks(googleUserId);
+    } catch {
+      // continue to drip
+    }
+    balance = await publicClient.getBalance({ address });
+    if (balance >= minBalance) {
+      return {
+        ok: true,
+        funded: true,
+        balanceEth: formatEther(balance),
+        drippedEth: "0",
+        reclaimed: true,
+      };
+    }
   }
 
   const res = await fetch("/api/play/drip", {
@@ -242,7 +246,20 @@ export async function ensurePlayWalletFunded(
     drippedEth?: string;
   };
 
-  balance = await publicClient.getBalance({ address });
+  // RPC balance reads can lag just after the faucet receipt. Give the transfer
+  // a few short consistency checks before reporting a funding failure.
+  for (let attempt = 0; attempt < 4; attempt++) {
+    balance = await publicClient.getBalance({ address });
+    if (balance >= minBalance) {
+      return {
+        ok: true,
+        funded: true,
+        balanceEth: formatEther(balance),
+        drippedEth: data.drippedEth || "0",
+      };
+    }
+    if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+  }
   if (balance >= minBalance) {
     return {
       ok: true,

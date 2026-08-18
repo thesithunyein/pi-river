@@ -1401,7 +1401,9 @@ export default function OnchainTablePage() {
       if (silent) {
         try {
           setLog("Checking play seat gas…");
-          await play.ensureFunded();
+          // Do not scan historical tables during showdown. That recovery path
+          // can keep the UI on "Checking play seat gas" for a long time.
+          await play.ensureFunded(undefined, { reclaim: false });
         } catch (err) {
           throw new Error(
             err instanceof Error ? err.message : "Need a little more ETH for showdown gas."
