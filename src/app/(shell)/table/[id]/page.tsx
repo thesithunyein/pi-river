@@ -1516,7 +1516,11 @@ export default function OnchainTablePage() {
       // submit this player's proof and the public board.
       const botSide = vsBot ? await submitBotSide() : {};
       await submitMyHoles();
-      if (vsBot && (!botSide.values || botSide.values.length < 2)) {
+      const shownBotCards =
+        botSide.values && botSide.values.length >= 2
+          ? botSide.values.slice(0, 2).map((v) => decodeCard(BigInt(v)))
+          : [];
+      if (vsBot && shownBotCards.length < 2) {
         pauseAutoDeal(8000);
         await revealBotHoles();
       }
@@ -1526,7 +1530,7 @@ export default function OnchainTablePage() {
 
       if (vsBot) {
         setLog("Settling the pot…");
-        await finalizeShowdownSettle();
+        await finalizeShowdownSettle(shownBotCards);
         setRevealOpen(false);
         return;
       }
@@ -1545,7 +1549,7 @@ export default function OnchainTablePage() {
     }
   }
 
-  async function finalizeShowdownSettle() {
+  async function finalizeShowdownSettle(shownOppOverride: DecodedCard[] = []) {
     const before = handStartStack.current;
     const hash = await writeFn({
       address: RIVER_HOLDEM_ADDRESS,
@@ -1555,14 +1559,9 @@ export default function OnchainTablePage() {
     });
     await waitTx(hash);
 
-    // Keep bot cards face-up through settle + result beat
-    let shownOpp: DecodedCard[] = [];
-    if (vsBot) {
-      pauseAutoDeal(8000);
-      shownOpp = await revealBotHoles();
-      await new Promise((r) => window.setTimeout(r, 400));
-    }
-
+    // The bot cards were already revealed before finalization. Do not call the
+    // slow peek endpoint again here, or Win/Lose waits on a redundant request.
+    const shownOpp = shownOppOverride;
     await refresh();
 
     let after = before;
