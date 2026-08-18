@@ -1507,8 +1507,13 @@ export default function OnchainTablePage() {
         return botData;
       }
 
-      // Player holes + bot/board in parallel → much shorter settle for demo
-      const [, botSide] = await Promise.all([submitMyHoles(), submitBotSide()]);
+      // Keep the Inco calls sequential. Running the browser's attested decrypt,
+      // board reveal, and Vercel's bot reveal together can rate-limit the same
+      // covalidator request and leave the UI stuck on Settling. Reveal the bot
+      // first so its cards are painted as soon as the server returns, then
+      // submit this player's proof and the public board.
+      const botSide = vsBot ? await submitBotSide() : {};
+      await submitMyHoles();
       if (vsBot && (!botSide.values || botSide.values.length < 2)) {
         pauseAutoDeal(8000);
         await revealBotHoles();
