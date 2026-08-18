@@ -1398,11 +1398,12 @@ export default function OnchainTablePage() {
         return;
       }
 
-      if (silent) {
+      // Bot showdowns are settled server-side, so the play seat sends no
+      // transactions and needs no gas check. Friend games still submit from
+      // the browser and keep the check below.
+      if (silent && !vsBot) {
         try {
           setLog("Checking play seat gas…");
-          // Do not scan historical tables during showdown. That recovery path
-          // can keep the UI on "Checking play seat gas" for a long time.
           await play.ensureFunded(undefined, { reclaim: false });
         } catch (err) {
           throw new Error(
@@ -1431,8 +1432,6 @@ export default function OnchainTablePage() {
       setMyCards(myPeek.map((p) => decodeCard(p.value)));
       sound.playCardSlide();
 
-      const mySlots = isP0 ? [0, 1] : [2, 3];
-
       const [boardOuts, boardCount] = (await publicClient.readContract({
         address: RIVER_HOLDEM_ADDRESS,
         abi: riverHoldemAbi,
@@ -1441,109 +1440,103 @@ export default function OnchainTablePage() {
       })) as readonly [readonly Hex[], number];
       const board = await readRevealed(boardOuts.slice(0, boardCount) as Hex[]);
 
-      async function submitMyHoles() {
+      if (!vsBot) {
+        // Friend games submit from the browser as before.
         for (let i = 0; i < 2; i++) {
           setLog(`Submitting your card ${i + 1}/2…`);
           const hash = await writeFn({
             address: RIVER_HOLDEM_ADDRESS,
             abi: riverHoldemAbi,
             functionName: "submitShowdownCard",
-            args: [tableId, mySlots[i], myPeek[i].value, myPeek[i].sigs],
+            args: [tableId, isP0 ? i : 2 + i, myPeek[i].value, myPeek[i].sigs],
           });
           await waitTx(hash);
         }
-        if (!vsBot) {
-          setLog("Submitting board cards…");
-          for (let i = 0; i < board.length; i++) {
-            const hash = await writeFn({
-              address: RIVER_HOLDEM_ADDRESS,
-              abi: riverHoldemAbi,
-              functionName: "submitShowdownCard",
-              args: [tableId, 4 + i, board[i].value, board[i].sigs],
-            });
-            await waitTx(hash);
-          }
-        }
-      }
-
-      async function submitBotSide(boardProofs: typeof board): Promise<{
-        values?: Array<number | string>;
-      }> {
-        if (!vsBot) {
-          // Board is handled by submitMyHoles; friend path needs nothing more.
-          return {};
-        }
-
-        setLog("River Bot is showing cards…");
-        let botData: {
-          error?: string;
-          reason?: string;
-          skipped?: boolean;
-          values?: Array<number | string>;
-        } | null = null;
-        let botOk = false;
-        for (let attempt = 0; attempt < 2 && !botOk; attempt++) {
-          if (attempt > 0) {
-            setLog("Retrying River Bot showdown…");
-            await new Promise((r) => window.setTimeout(r, 400));
-          }
-          const botRes = await fetch("/api/bot/showdown", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              tableId: tableId.toString(),
-              board: boardProofs.map((card) => ({
-                value: card.value.toString(),
-                sigs: card.sigs,
-              })),
-            }),
+        setLog("Submitting board cards…");
+        for (let i = 0; i < board.length; i++) {
+          const hash = await writeFn({
+            address: RIVER_HOLDEM_ADDRESS,
+            abi: riverHoldemAbi,
+            functionName: "submitShowdownCard",
+            args: [tableId, 4 + i, board[i].value, board[i].sigs],
           });
-          const text = await botRes.text();
-          try {
-            botData = text.trim() ? (JSON.parse(text) as typeof botData) : null;
-          } catch {
-            botData = { error: `Bot showdown bad response (${botRes.status})` };
-          }
-          botOk = botRes.ok && !botData?.skipped;
+          await waitTx(hash);
         }
-        if (!botOk || !botData) {
-          throw new Error(botData?.error || botData?.reason || "Bot could not show cards.");
-        }
-        if (botData.values && botData.values.length >= 2) {
-          setOppCards(botData.values.slice(0, 2).map((v) => decodeCard(BigInt(v))));
-          sound.playCardSlide();
-        }
-        return botData;
-      }
-
-      // Keep the Inco calls sequential. Running the browser's attested decrypt,
-      // board reveal, and Vercel's bot reveal together can rate-limit the same
-      // covalidator request and leave the UI stuck on Settling. Reveal the bot
-      // first so its cards are painted as soon as the server returns, then
-      // submit this player's proof and the public board.
-      const botSide = vsBot ? await submitBotSide(board) : {};
-      await submitMyHoles();
-      const shownBotCards =
-        botSide.values && botSide.values.length >= 2
-          ? botSide.values.slice(0, 2).map((v) => decodeCard(BigInt(v)))
-          : [];
-      if (vsBot && shownBotCards.length < 2) {
-        pauseAutoDeal(8000);
-        await revealBotHoles();
-      }
-      pauseAutoDeal(8000);
-
-      await refresh();
-
-      if (vsBot) {
-        setLog("Settling the pot…");
-        await finalizeShowdownSettle(shownBotCards);
-        setRevealOpen(false);
+        setLog("Cards in. Tap Finalize to pay the winner.");
+        setBanner("Almost done — tap Finalize to settle the pot.");
         return;
       }
 
-      setLog("Cards in. Tap Finalize to pay the winner.");
-      setBanner("Almost done — tap Finalize to settle the pot.");
+      // Bot path: send the cached player and board proofs to the server. The
+      // server reveals the bot cards, submits all nine slots, and finalizes the
+      // pot. The browser makes no wallet writes and no signature decrypts here.
+      setLog("River Bot is showing cards…");
+      const payload = {
+        tableId: tableId.toString(),
+        playerHoles: myPeek.map((card) => ({
+          value: card.value.toString(),
+          sigs: card.sigs,
+        })),
+        board: board.map((card) => ({
+          value: card.value.toString(),
+          sigs: card.sigs,
+        })),
+      };
+      let settleData: {
+        ok?: boolean;
+        skipped?: boolean;
+        error?: string;
+        botValues?: Array<number | string>;
+        playerValues?: Array<number | string>;
+        winner?: string;
+      } | null = null;
+      for (let attempt = 0; attempt < 3 && !settleData?.ok; attempt++) {
+        if (attempt > 0) {
+          setLog("Retrying River Bot showdown…");
+          await new Promise((r) => window.setTimeout(r, 600 * attempt));
+        }
+        const res = await fetch("/api/bot/showdown", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        const text = await res.text();
+        try {
+          settleData = text.trim() ? (JSON.parse(text) as typeof settleData) : null;
+        } catch {
+          settleData = { error: `Bot showdown bad response (${res.status})` };
+        }
+      }
+
+      // If the server already settled but a slow response was lost, detect the
+      // settled state on-chain instead of showing a false error.
+      if (!settleData?.ok) {
+        const row = (await publicClient!.readContract({
+          address: RIVER_HOLDEM_ADDRESS,
+          abi: riverHoldemAbi,
+          functionName: "tables",
+          args: [tableId],
+        })) as readonly unknown[];
+        const settledNow = Number(row[11]) === 6;
+        if (!settledNow) {
+          throw new Error(settleData?.error || "Bot could not settle the showdown.");
+        }
+      }
+
+      const botCards = (settleData?.botValues ?? [])
+        .slice(0, 2)
+        .map((v) => decodeCard(BigInt(v)));
+      if (settleData?.playerValues && settleData.playerValues.length >= 2) {
+        setMyCards(settleData.playerValues.slice(0, 2).map((v) => decodeCard(BigInt(v))));
+      }
+      if (botCards.length === 2) {
+        setOppCards(botCards);
+        sound.playCardSlide();
+      }
+      pauseAutoDeal(8000);
+      setLog("Settling the pot…");
+      await finalizeShowdownSettle(botCards, { skipWrite: true });
+      setRevealOpen(false);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Showdown failed.";
       const friendly = friendlyShowdownError(msg);
@@ -1556,18 +1549,23 @@ export default function OnchainTablePage() {
     }
   }
 
-  async function finalizeShowdownSettle(shownOppOverride: DecodedCard[] = []) {
+  async function finalizeShowdownSettle(
+    shownOppOverride: DecodedCard[] = [],
+    opts?: { skipWrite?: boolean }
+  ) {
     const before = handStartStack.current;
-    const hash = await writeFn({
-      address: RIVER_HOLDEM_ADDRESS,
-      abi: riverHoldemAbi,
-      functionName: "finalizeShowdown",
-      args: [tableId],
-    });
-    await waitTx(hash);
+    if (!opts?.skipWrite) {
+      const hash = await writeFn({
+        address: RIVER_HOLDEM_ADDRESS,
+        abi: riverHoldemAbi,
+        functionName: "finalizeShowdown",
+        args: [tableId],
+      });
+      await waitTx(hash);
+    }
 
-    // The bot cards were already revealed before finalization. Do not call the
-    // slow peek endpoint again here, or Win/Lose waits on a redundant request.
+    // The server already finalized the bot showdown, so this just refreshes and
+    // shows the result without waiting on another reveal or a client tx.
     const shownOpp = shownOppOverride;
     await refresh();
 
